@@ -3,102 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Art & Palette Sentiment Analyzer</title>
+    <title>Palette Mood — Smart Art & Palette Sentiment Analyzer</title>
+    <meta name="description" content="พิมพ์ความรู้สึกเป็นภาษาอังกฤษหรืออัปโหลดรูป แล้วรับจานสี 8 สี ธีม และฟอนต์ที่เข้ากับอารมณ์">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <!-- Header Section -->
-        <header style="position: relative;">
-            <!-- 🟢 แก้ไขคำว่า AI Color Generator -->
-            <h1>Smart Art & Palette Sentiment Analyzer</h1>
-            <p id="subTitle">ระบบวิเคราะห์อารมณ์จากข้อความพร้อมแนะนำจานสีสำหรับงานออกแบบ UI/UX</p>
-            <button type="button" id="langToggleBtn" style="position: absolute; right: 0; top: 0;">EN</button>
+    <div class="page">
+        <header class="topbar">
+            <span class="wordmark" aria-label="Palette Mood">
+                <span class="wordmark-chips" aria-hidden="true"><i></i><i></i><i></i></span>
+                Palette Mood
+            </span>
+            <button type="button" id="langToggleBtn" class="btn-ghost lang-btn" aria-label="Switch language">EN</button>
         </header>
 
-        <!-- Input Section -->
-        <section class="input-section">
-            <!-- 🟢 แก้ไขข้อความระบุให้กรอกภาษาอังกฤษ -->
-            <label id="inputLabel" for="textInput" class="input-label">กรอกข้อความภาษาอังกฤษเพื่อวิเคราะห์อารมณ์ด้วย AI Model</label>
-            <textarea id="textInput" placeholder="พิมพ์ความรู้สึกของคุณ เช่น I feel sad หรือ I feel happy..."></textarea>
-            
-            <div class="action-buttons" style="margin-top: 15px; display: flex; gap: 10px;">
-                <button type="button" id="analyzeBtn" class="btn-primary">วิเคราะห์อารมณ์ (Analyze)</button>
-                <button type="button" id="uploadTriggerBtn" class="btn-secondary">อัปโหลดรูปภาพ (Extract Image)</button>
-                <input type="file" id="imageInput" accept="image/*" style="display: none;">
-            </div>
-            
-            <div id="modelStatus" class="model-status" style="margin-top: 10px; font-size: 0.9em; color: #64748b;"></div>
-            <div id="alertBox" class="alert-box" style="display: none; color: red; margin-top: 10px;"></div>
-        </section>
+        <main>
+            <section class="composer" aria-labelledby="pageTitle">
+                <h1 id="pageTitle" data-i18n="title">เปลี่ยนความรู้สึกให้เป็นจานสี</h1>
+                <p id="subTitle" class="lede">พิมพ์ประโยคภาษาอังกฤษที่บอกความรู้สึก หรือใช้รูปภาพ แล้วรับจานสี 8 สี พร้อมธีมและฟอนต์ที่เข้ากัน</p>
 
-        <!-- Result Section -->
-        <section class="result-section" style="margin-top: 30px;">
-            <!-- 1. ส่วนบอกอารมณ์ -->
-            <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
-                <span id="emotionLabel" class="emotion-badge">-</span>
-                <span id="confidenceValue" style="font-weight: bold; color: #64748b;">0%</span>
-            </div>
+                <label id="inputLabel" for="textInput" class="field-label">ข้อความภาษาอังกฤษ</label>
+                <textarea id="textInput" rows="3" maxlength="1000" placeholder="เช่น I am so excited about our new project!"></textarea>
 
-            <!-- 2. ส่วนแสดงรูปภาพ (อยู่ระหว่างคำบอกอารมณ์ และ ชุดจานสีที่แนะนำ) -->
-            <div id="extractedPaletteSection" class="extracted-section" style="display: none; margin: 20px 0; text-align: center;">
-                <div class="image-preview-container" style="max-width: 100%; overflow: hidden; border-radius: 12px; max-height: 400px; display: inline-block; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                    <img id="imagePreview" src="" alt="Uploaded Preview" style="max-width: 100%; height: auto; display: block; object-fit: contain;">
+                <div class="actions">
+                    <button type="button" id="analyzeBtn" class="btn-primary">วิเคราะห์ข้อความ</button>
+                    <button type="button" id="uploadTriggerBtn" class="btn-secondary">ใช้สีจากรูปภาพ</button>
+                    <input type="file" id="imageInput" accept="image/*" hidden>
+                    <span id="modelStatus" class="model-status" role="status" aria-live="polite"></span>
                 </div>
-            </div>
 
-            <!-- 3. หัวข้อชุดจานสี + ปุ่ม Export/Copy -->
-            <div class="palette-header-container" style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; flex-wrap: wrap; gap: 10px;">
-                <!-- 🟢 แก้ไขคำว่า ชุดจานสีแนะนำสมมาตร (8 Color Palette) -->
-                <h3 id="paletteTitle" style="margin: 0;">ชุดจานสีที่แนะนำ</h3>
-                
-                <div class="export-container" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                    <button type="button" id="exportAseBtn" class="btn-export" style="background-color: #3182ce; color: white; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.8rem;">🎨 ASE</button>
-                    <button type="button" id="exportJsonBtn" class="btn-export" style="background-color: #475569; color: white; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.8rem;">📄 JSON</button>
-                    <button type="button" id="exportFigmaBtn" class="btn-export" style="background-color: #059669; color: white; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.8rem;">❖ Figma</button>
+                <div id="alertBox" class="alert" role="alert" style="display: none;"></div>
+            </section>
 
-                    <button type="button" id="copyHexBtn" class="btn-export" style="background-color: #8b5cf6; color: white; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.8rem;">📋 HEX</button>
-                    <button type="button" id="copyRgbBtn" class="btn-export" style="background-color: #ec4899; color: white; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.8rem;">📋 RGB</button>
-                    <button type="button" id="copyHslBtn" class="btn-export" style="background-color: #10b981; color: white; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.8rem;">📋 HSL</button>
-                    <button type="button" id="copyTailwindBtn" class="btn-export" style="background-color: #06b6d4; color: white; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.8rem;">📋 Tailwind</button>
-                    <button type="button" id="copyCssVarBtn" class="btn-export" style="background-color: #f59e0b; color: white; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 0.8rem;">📋 CSS Vars</button>
+            <section id="resultSection" class="result is-empty" aria-live="polite">
+                <p class="result-empty" data-i18n="resultEmpty">ผลลัพธ์จะแสดงที่นี่ ลองพิมพ์ประโยคด้านบนแล้วกดวิเคราะห์</p>
+
+                <div class="result-body">
+                    <div class="result-head">
+                        <div class="result-title">
+                            <span id="emotionLabel" class="emotion-name">-</span>
+                            <span id="confidenceValue" class="confidence">0%</span>
+                        </div>
+                        <div id="extractedPaletteSection" class="source-image" style="display: none;">
+                            <img id="imagePreview" src="" alt="">
+                        </div>
+                    </div>
+
+                    <h2 id="paletteTitle" class="visually-hidden">จานสีที่แนะนำ</h2>
+                    <div id="paletteDisplay"></div>
+                    <p class="hint" data-i18n="copyHint">คลิกที่สีเพื่อคัดลอกรหัส</p>
+
+                    <div class="tools">
+                        <div class="tool-group">
+                            <span class="tool-label" data-i18n="copyAs">คัดลอกเป็น</span>
+                            <button type="button" id="copyHexBtn" class="chip-btn">HEX</button>
+                            <button type="button" id="copyRgbBtn" class="chip-btn">RGB</button>
+                            <button type="button" id="copyHslBtn" class="chip-btn">HSL</button>
+                            <button type="button" id="copyTailwindBtn" class="chip-btn">Tailwind</button>
+                            <button type="button" id="copyCssVarBtn" class="chip-btn">CSS</button>
+                        </div>
+                        <div class="tool-group">
+                            <span class="tool-label" data-i18n="download">ดาวน์โหลด</span>
+                            <button type="button" id="exportAseBtn" class="chip-btn">ASE</button>
+                            <button type="button" id="exportJsonBtn" class="chip-btn">JSON</button>
+                            <button type="button" id="exportFigmaBtn" class="chip-btn">Figma tokens</button>
+                        </div>
+                    </div>
+
+                    <dl class="advice">
+                        <div><dt data-i18n="theme">ธีม</dt><dd id="themeName">-</dd></div>
+                        <div><dt data-i18n="fonts">ฟอนต์</dt><dd id="fontPairing">-</dd></div>
+                        <div><dt data-i18n="usage">เหมาะกับ</dt><dd id="usageContext">-</dd></div>
+                    </dl>
                 </div>
-            </div>
+            </section>
 
-            <!-- การ์ดแสดงจานสี -->
-            <div id="paletteDisplay" style="margin-top: 15px;"></div>
+            <section class="history" aria-labelledby="historyTitle">
+                <div class="history-head">
+                    <h2 id="historyTitle">ประวัติล่าสุด</h2>
+                    <button type="button" id="clearHistoryBtn" class="btn-ghost danger">ล้างประวัติ</button>
+                </div>
+                <ul id="historyList" class="history-list"></ul>
+            </section>
+        </main>
 
-            <!-- คำแนะนำการออกแบบ -->
-            <div class="advisory-section" style="margin-top: 20px;">
-                <p><strong>ธีมที่แนะนำ:</strong> <span id="themeName">-</span></p>
-                <p><strong>ชุดฟอนต์:</strong> <span id="fontPairing">-</span></p>
-                <p><strong>การนำไปใช้งาน:</strong> <span id="usageContext">-</span></p>
-            </div>
-        </section>
-
-        <!-- History Section -->
-        <section class="history-section" style="margin-top: 40px;">
-            <div class="history-header" style="display: flex; justify-content: space-between; align-items: center;">
-                <h3 id="historyTitle">ประวัติการวิเคราะห์ (History)</h3>
-                <button type="button" id="clearHistoryBtn" class="btn-clear" style="background-color: #fee2e2; color: #dc2626; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;">ล้างประวัติ</button>
-            </div>
-            <div id="historyList" class="history-list" style="margin-top: 15px;"></div>
-        </section>
+        <footer class="footer" data-i18n="footer">ประมวลผลบนเบราว์เซอร์ของคุณ ข้อความและรูปภาพไม่ถูกส่งออกไปที่เซิร์ฟเวอร์</footer>
     </div>
 
-    <!-- Pop-up (Modal) ยืนยันการล้างประวัติ -->
-    <div id="confirmModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 9999; justify-content: center; align-items: center;">
-        <div style="background: white; padding: 24px; border-radius: 12px; max-width: 400px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
-            <h3 id="modalTitle" style="margin-top: 0; color: #1e293b;">ยืนยันการล้างประวัติ</h3>
-            <p id="modalDesc" style="color: #64748b; font-size: 0.95rem; line-height: 1.5;">คุณแน่ใจหรือไม่ว่าต้องการลบประวัติการวิเคราะห์ทั้งหมด? รายการที่ลบแล้วจะไม่สามารถกู้คืนได้</p>
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-                <button type="button" id="modalCancelBtn" style="padding: 8px 16px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; border-radius: 6px; cursor: pointer; font-weight: 500;">ยกเลิก</button>
-                <button type="button" id="modalConfirmBtn" style="padding: 8px 16px; border: none; background: #dc2626; color: white; border-radius: 6px; cursor: pointer; font-weight: 500;">ลบประวัติ</button>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <div id="confirmModal" class="modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-card">
+            <h3 id="modalTitle">ล้างประวัติทั้งหมด?</h3>
+            <p id="modalDesc">ประวัติทั้งหมดในเบราว์เซอร์นี้จะถูกลบ และกู้คืนไม่ได้</p>
+            <div class="modal-actions">
+                <button type="button" id="modalCancelBtn" class="btn-secondary">ยกเลิก</button>
+                <button type="button" id="modalConfirmBtn" class="btn-danger">ล้างประวัติ</button>
             </div>
         </div>
     </div>
 
-    <!-- Script Module -->
     <script type="module" src="app.js"></script>
 </body>
 </html>

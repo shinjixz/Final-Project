@@ -9,7 +9,6 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const $ = id => document.getElementById(id);
 
 let currentLang = 'TH';
-let paletteAnimationTimer = null;
 let pipelinePromise = null;   // shared model download (started once)
 let modelStatus = 'idle';      // idle | loading | ready | failed
 const MODEL_WAIT_MS = 15000;   // max wait per click before using the fallback
@@ -63,7 +62,7 @@ function slugifyRole(role, index) {
 
 function copyPaletteCode(format) {
     if (!activePaletteData || activePaletteData.length === 0) {
-        return alert("ไม่มีข้อมูลจานสี!");
+        return toast(translations[currentLang].noPalette);
     }
 
     let codeResult = '';
@@ -106,8 +105,7 @@ function copyPaletteCode(format) {
             break;
     }
 
-    navigator.clipboard.writeText(codeResult);
-    alert(`คัดลอกโค้ดรูปแบบ ${format} เรียบร้อยแล้ว!`);
+    copyText(codeResult, format);
 }
 
 function createASEBuffer(palette) {
@@ -169,7 +167,7 @@ function createASEBuffer(palette) {
 }
 
 function downloadASE(palette, filename = "palette.ase") {
-    if (!palette || palette.length === 0) return alert("ไม่มีข้อมูลจานสี!");
+    if (!palette || palette.length === 0) return toast(translations[currentLang].noPalette);
     const buffer = createASEBuffer(palette);
     const blob = new Blob([buffer], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
@@ -181,7 +179,7 @@ function downloadASE(palette, filename = "palette.ase") {
 }
 
 function downloadJSON(palette, filename = "palette.json") {
-    if (!palette || palette.length === 0) return alert("ไม่มีข้อมูลจานสี!");
+    if (!palette || palette.length === 0) return toast(translations[currentLang].noPalette);
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(palette, null, 2));
     const a = document.createElement("a");
     a.href = dataStr;
@@ -190,34 +188,58 @@ function downloadJSON(palette, filename = "palette.json") {
 }
 
 function copyFigmaTokens(palette) {
-    if (!palette || palette.length === 0) return alert("ไม่มีข้อมูลจานสี!");
+    if (!palette || palette.length === 0) return toast(translations[currentLang].noPalette);
     const figmaTokens = {};
     palette.forEach((item, i) => {
         const hex = typeof item === 'string' ? item : item.hex;
         const role = slugifyRole(typeof item === 'object' ? item.role : '', i);
         figmaTokens[role] = { value: hex, type: "color" };
     });
-    navigator.clipboard.writeText(JSON.stringify(figmaTokens, null, 2));
-    alert("คัดลอก Figma Color Tokens เรียบร้อยแล้ว!");
+    copyText(JSON.stringify(figmaTokens, null, 2), 'Figma tokens');
 }
 
 // ==========================================
 // 🖼️ IMAGE COLOR EXTRACTION HELPERS
 // ==========================================
 
+// Dominant colours: sample a downscaled copy, bucket similar colours,
+// then pick the most common buckets that are clearly different from each other.
 function extractRGBColors(ctx, width, height, count) {
-    const hexList = [];
-    const rgbList = [];
-    const stepX = Math.floor(width / (count + 1));
-    const stepY = Math.floor(height / 2);
-
-    for (let i = 1; i <= count; i++) {
-        const p = ctx.getImageData(i * stepX, stepY, 1, 1).data;
-        const hex = '#' + ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1);
-        hexList.push(hex);
-        rgbList.push({ r: p[0], g: p[1], b: p[2] });
+    const data = ctx.getImageData(0, 0, width, height).data;
+    const buckets = new Map();
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 128) continue; // skip transparent pixels
+        const key = (data[i] >> 4) << 8 | (data[i + 1] >> 4) << 4 | (data[i + 2] >> 4);
+        const b = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+        b.n++; b.r += data[i]; b.g += data[i + 1]; b.b += data[i + 2];
+        buckets.set(key, b);
     }
+    const ranked = [...buckets.values()]
+        .map(b => ({ n: b.n, r: Math.round(b.r / b.n), g: Math.round(b.g / b.n), b: Math.round(b.b / b.n) }))
+        .sort((x, y) => y.n - x.n);
+    const dist = (a, c) => Math.hypot(a.r - c.r, a.g - c.g, a.b - c.b);
+    const picked = [];
+    for (const minDist of [60, 35, 15, 0]) {
+        for (const c of ranked) {
+            if (picked.length >= count) break;
+            if (!picked.includes(c) && picked.every(p => dist(p, c) >= minDist)) picked.push(c);
+        }
+        if (picked.length >= count) break;
+    }
+    const rgbList = picked.map(({ r, g, b }) => ({ r, g, b }));
+    const hexList = rgbList.map(({ r, g, b }) =>
+        '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase());
     return { hexList, rgbList };
+}
+
+// Small JPEG copy of the image for the history list (keeps localStorage small).
+function makeThumbnail(img, maxSide = 320) {
+    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.75);
 }
 
 function analyzeColorSentiment(rgbColors) {
@@ -251,37 +273,61 @@ function clearImageResult() {
 const translations = {
     TH: {
         langBtn: 'EN',
-        subTitle: 'ระบบวิเคราะห์อารมณ์จากข้อความพร้อมแนะนำจานสีสำหรับงานออกแบบ UI/UX',
-        inputLabel: 'กรอกข้อความภาษาอังกฤษเพื่อวิเคราะห์อารมณ์ด้วย AI Model',
-        placeholder: 'พิมพ์ความรู้สึกของคุณ เช่น I feel sad หรือ I feel happy...',
-        analyzeBtn: 'วิเคราะห์อารมณ์ (Analyze)',
-        uploadBtn: 'อัปโหลดรูปภาพ (Extract Image)',
-        paletteTitle: 'ชุดจานสีที่แนะนำ',
-        historyTitle: 'ประวัติการวิเคราะห์ (History)',
+        title: 'เปลี่ยนความรู้สึกให้เป็นจานสี',
+        subTitle: 'พิมพ์ประโยคภาษาอังกฤษที่บอกความรู้สึก หรือใช้รูปภาพ แล้วรับจานสี 8 สี พร้อมธีมและฟอนต์ที่เข้ากัน',
+        inputLabel: 'ข้อความภาษาอังกฤษ',
+        placeholder: 'เช่น I am so excited about our new project!',
+        analyzeBtn: 'วิเคราะห์ข้อความ',
+        analyzing: 'กำลังวิเคราะห์…',
+        uploadBtn: 'ใช้สีจากรูปภาพ',
+        paletteTitle: 'จานสีที่แนะนำ',
+        resultEmpty: 'ผลลัพธ์จะแสดงที่นี่ ลองพิมพ์ประโยคด้านบนแล้วกดวิเคราะห์',
+        copyHint: 'คลิกที่สีเพื่อคัดลอกรหัส',
+        copyAs: 'คัดลอกเป็น',
+        download: 'ดาวน์โหลด',
+        theme: 'ธีม',
+        fonts: 'ฟอนต์',
+        usage: 'เหมาะกับ',
+        historyTitle: 'ประวัติล่าสุด',
         clearHistory: 'ล้างประวัติ',
-        emptyHistory: 'ยังไม่มีประวัติการวิเคราะห์',
-        modalTitle: 'ยืนยันการล้างประวัติ',
-        modalDesc: 'คุณแน่ใจหรือไม่ว่าต้องการลบประวัติการวิเคราะห์ทั้งหมด? รายการที่ลบแล้วจะไม่สามารถกู้คืนได้',
+        emptyHistory: 'ยังไม่มีประวัติ ผลการวิเคราะห์ 10 รายการล่าสุดจะเก็บไว้ที่นี่',
+        imageItem: 'รูปภาพ',
+        modalTitle: 'ล้างประวัติทั้งหมด?',
+        modalDesc: 'ประวัติทั้งหมดในเบราว์เซอร์นี้จะถูกลบ และกู้คืนไม่ได้',
         modalCancel: 'ยกเลิก',
-        modalConfirm: 'ลบประวัติ',
-        copySuccess: 'คัดลอกสี'
+        modalConfirm: 'ล้างประวัติ',
+        copied: 'คัดลอกแล้ว',
+        noPalette: 'ยังไม่มีจานสี วิเคราะห์ข้อความหรือรูปภาพก่อน',
+        footer: 'ประมวลผลบนเบราว์เซอร์ของคุณ ข้อความและรูปภาพไม่ถูกส่งออกไปที่เซิร์ฟเวอร์'
     },
     EN: {
         langBtn: 'TH',
-        subTitle: 'Text Sentiment Analysis & Color Palette Recommendation',
-        inputLabel: 'Enter English text to analyze sentiment via AI Model',
-        placeholder: 'i feel happy or feel sad...',
-        analyzeBtn: 'Analyze Sentiment',
-        uploadBtn: 'Upload Image (Extract)',
-        paletteTitle: 'Recommended Color Palette',
-        historyTitle: 'Analysis History',
-        clearHistory: 'Clear History',
-        emptyHistory: 'No analysis history found',
-        modalTitle: 'Confirm Clear History',
-        modalDesc: 'Are you sure you want to delete all analysis history? Deleted items cannot be restored.',
+        title: 'Turn a feeling into a palette',
+        subTitle: 'Write an English sentence about how you feel, or use an image, and get an 8-colour palette with a matching theme and fonts.',
+        inputLabel: 'English text',
+        placeholder: 'e.g. I am so excited about our new project!',
+        analyzeBtn: 'Analyze text',
+        analyzing: 'Analyzing…',
+        uploadBtn: 'Use colours from an image',
+        paletteTitle: 'Suggested palette',
+        resultEmpty: 'Your result will appear here. Type a sentence above and press Analyze.',
+        copyHint: 'Click a colour to copy its code',
+        copyAs: 'Copy as',
+        download: 'Download',
+        theme: 'Theme',
+        fonts: 'Fonts',
+        usage: 'Good for',
+        historyTitle: 'Recent',
+        clearHistory: 'Clear history',
+        emptyHistory: 'No history yet. Your last 10 results will be kept here.',
+        imageItem: 'Image',
+        modalTitle: 'Clear all history?',
+        modalDesc: 'All history in this browser will be deleted and cannot be restored.',
         modalCancel: 'Cancel',
-        modalConfirm: 'Delete All',
-        copySuccess: 'Copied color'
+        modalConfirm: 'Clear history',
+        copied: 'Copied',
+        noPalette: 'No palette yet. Analyze some text or an image first.',
+        footer: 'Runs in your browser. Your text and images are never sent to a server.'
     }
 };
 
@@ -385,39 +431,65 @@ const emotionRules = {
 };
 
 function updateLanguageUI() {
-    const t = translations[currentLang];
-
-    if ($('langToggleBtn'))$('langToggleBtn').innerText = t.langBtn;
-    if ($('subTitle'))$('subTitle').innerText = t.subTitle;
-    if ($('inputLabel'))$('inputLabel').innerText = t.inputLabel;
-    if ($('textInput'))$('textInput').placeholder = t.placeholder;
-    if ($('analyzeBtn') && !$('analyzeBtn').disabled)$('analyzeBtn').innerText = t.analyzeBtn;
-    if ($('uploadTriggerBtn'))$('uploadTriggerBtn').innerText = t.uploadBtn;
-    if ($('paletteTitle'))$('paletteTitle').innerText = t.paletteTitle;
-    if ($('historyTitle'))$('historyTitle').innerText = t.historyTitle;
-    if ($('clearHistoryBtn'))$('clearHistoryBtn').innerText = t.clearHistory;
-    
-    if ($('modalTitle'))$('modalTitle').innerText = t.modalTitle;
-    if ($('modalDesc'))$('modalDesc').innerText = t.modalDesc;
-    if ($('modalCancelBtn'))$('modalCancelBtn').innerText = t.modalCancel;
-    if ($('modalConfirmBtn'))$('modalConfirmBtn').innerText = t.modalConfirm;
-
+    const tr = translations[currentLang];
+    document.documentElement.lang = currentLang === 'TH' ? 'th' : 'en';
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (tr[key]) el.innerText = tr[key];
+    });
+    if ($('langToggleBtn'))$('langToggleBtn').innerText = tr.langBtn;
+    if ($('subTitle'))$('subTitle').innerText = tr.subTitle;
+    if ($('inputLabel'))$('inputLabel').innerText = tr.inputLabel;
+    if ($('textInput'))$('textInput').placeholder = tr.placeholder;
+    if ($('analyzeBtn') && !$('analyzeBtn').disabled)$('analyzeBtn').innerText = tr.analyzeBtn;
+    if ($('uploadTriggerBtn'))$('uploadTriggerBtn').innerText = tr.uploadBtn;
+    if ($('paletteTitle'))$('paletteTitle').innerText = tr.paletteTitle;
+    if ($('historyTitle'))$('historyTitle').innerText = tr.historyTitle;
+    if ($('clearHistoryBtn'))$('clearHistoryBtn').innerText = tr.clearHistory;
+    if ($('modalTitle'))$('modalTitle').innerText = tr.modalTitle;
+    if ($('modalDesc'))$('modalDesc').innerText = tr.modalDesc;
+    if ($('modalCancelBtn'))$('modalCancelBtn').innerText = tr.modalCancel;
+    if ($('modalConfirmBtn'))$('modalConfirmBtn').innerText = tr.modalConfirm;
     renderHistoryList();
 }
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
+let toastTimer = null;
+function toast(message) {
+    const el = $('toast');
+    if (!el) return;
+    el.innerText = message;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+async function copyText(text, label) {
+    try {
+        await navigator.clipboard.writeText(text);
+        toast(`${translations[currentLang].copied} ${label}`);
+    } catch (e) {
+        toast(text);
+    }
+}
+
 const renderSwatches = colors => {
-    return `<div class="palette-grid">` + (colors || []).map(c => {
-        const hex = typeof c === 'string' ? c : c.hex;
-        const role = typeof c === 'object' && c.role ? c.role : 'COLOR';
+    return `<div class="strip">` + (colors || []).map(c => {
+        const hex = (typeof c === 'string' ? c : c.hex).toUpperCase();
+        const role = typeof c === 'object' && c.role ? c.role : '';
         return `
-            <div class="color-card" onclick="navigator.clipboard.writeText('${hex}'); alert('${translations[currentLang].copySuccess} ${hex}!')" title="Click to copy">
-                <div class="color-swatch-box" style="background-color: ${hex}"></div>
-                <div class="color-info">
-                    <span class="color-hex">${hex}</span>
-                    <span class="color-role">${role}</span>
-                </div>
-            </div>
-        `;
+            <button type="button" class="chip" data-hex="${escapeHtml(hex)}" aria-label="${escapeHtml(hex)} ${escapeHtml(role)}">
+                <span class="chip-color" style="background:${escapeHtml(hex)}"></span>
+                <span class="chip-meta">
+                    <span class="chip-hex">${escapeHtml(hex)}</span>
+                    ${role ? `<span class="chip-role">${escapeHtml(role)}</span>` : ''}
+                </span>
+            </button>`;
     }).join('') + `</div>`;
 };
 
@@ -484,37 +556,28 @@ function t(th, en) {
     return currentLang === 'TH' ? th : en;
 }
 
-function hexToSoftRgba(hex, opacity = 0.22) {
-    let c = hex.replace('#', '');
-    if (c.length === 3) c = c.split('').map(x => x + x).join('');
-    const num = parseInt(c, 16);
-    const r = (num >> 16) & 255;
-    const g = (num >> 8) & 255;
-    const b = num & 255;
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+function relativeLuminance(hex) {
+    const { r, g, b } = hexToRgb(hex);
+    const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
 }
 
-function startPaletteBackgroundAnimation(colorList) {
-    if (paletteAnimationTimer) clearInterval(paletteAnimationTimer);
-    if (!colorList || colorList.length === 0) return;
-
-    let currentIndex = 0;
-    const hexList = colorList.map(c => typeof c === 'string' ? c : c.hex);
-
-    const changeBg = () => {
-        const hexColor = hexList[currentIndex];
-        document.body.style.backgroundColor = hexToSoftRgba(hexColor, 0.25);
-        currentIndex = (currentIndex + 1) % hexList.length;
-    };
-
-    changeBg();
-    paletteAnimationTimer = setInterval(changeBg, 3500);
+// Use the palette colour that reads best on white as the page accent.
+function applyAccent(colorList) {
+    const hexList = (colorList || []).map(c => typeof c === 'string' ? c : c.hex);
+    if (!hexList.length) return;
+    const best = hexList.reduce((a, b) => (relativeLuminance(a) < relativeLuminance(b) ? a : b));
+    const contrast = 1.05 / (relativeLuminance(best) + 0.05);
+    const vivid = hexList.find(h => 1.05 / (relativeLuminance(h) + 0.05) >= 4.5 && hexToHsl(h).s >= 35);
+    const accent = vivid || (contrast >= 4.5 ? best : '#16181D');
+    document.documentElement.style.setProperty('--accent', accent);
 }
 
-function saveToHistory(type, inputContent, emotion, confidence, palette) {
+function saveToHistory(type, inputContent, emotion, confidence, palette, thumb = null) {
     const newItem = {
         type,
         content: inputContent,
+        thumb,
         emotion,
         confidence,
         palette,
@@ -550,109 +613,108 @@ function executeClearHistory() {
     closeConfirmModal();
 }
 
-async function renderHistoryList() {
-    const historyContainer = $('historyList');
-    if (!historyContainer) return;
+function parsePalette(palette) {
+    if (Array.isArray(palette)) return palette;
+    if (typeof palette === 'string') {
+        try { return JSON.parse(palette); } catch (e) { return []; }
+    }
+    return [];
+}
+
+function historyImageSrc(item) {
+    if (item.thumb) return item.thumb;
+    // Older entries stored the full image as `content`.
+    if (typeof item.content === 'string' && item.content.startsWith('data:image')) return item.content;
+    return '';
+}
+
+function renderHistoryList() {
+    const list = $('historyList');
+    if (!list) return;
+    const tr = translations[currentLang];
 
     let historyData = [];
-
     try {
         historyData = JSON.parse(localStorage.getItem('sentiment_history') || '[]');
     } catch (e) {
         historyData = [];
     }
-
-    if (!historyData || historyData.length === 0) {
-        historyContainer.innerHTML = `<p class="history-empty" style="text-align:center; color:#94a3b8; padding:15px 0;">${translations[currentLang].emptyHistory}</p>`;
+    if (!Array.isArray(historyData) || historyData.length === 0) {
+        list.innerHTML = `<li class="history-empty">${escapeHtml(tr.emptyHistory)}</li>`;
         return;
     }
-
     window.currentHistoryData = historyData;
 
-    historyContainer.innerHTML = historyData.map((item, index) => {
-        const timeString = item.createdAt 
-            ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    list.innerHTML = historyData.map((item, index) => {
+        const time = item.createdAt
+            ? new Date(item.createdAt).toLocaleString(currentLang === 'TH' ? 'th-TH' : 'en-GB',
+                { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
             : '';
-
-        let paletteArray = [];
-        if (Array.isArray(item.palette)) {
-            paletteArray = item.palette;
-        } else if (typeof item.palette === 'string') {
-            try { paletteArray = JSON.parse(item.palette); } catch (e) { paletteArray = []; }
-        }
-
-        const hexList = paletteArray.map(c => typeof c === 'string' ? c : c.hex);
+        const hexList = parsePalette(item.palette).map(c => typeof c === 'string' ? c : c.hex);
         const isImage = item.type === 'image';
+        const src = isImage ? historyImageSrc(item) : '';
+        const label = isImage
+            ? (item.content && !String(item.content).startsWith('data:') ? item.content : tr.imageItem)
+            : item.content;
+        const visual = isImage && src
+            ? `<img class="history-thumb" src="${escapeHtml(src)}" alt="">`
+            : `<span class="history-glyph" aria-hidden="true">${isImage ? '▣' : '“'}</span>`;
+        const emotion = String(item.emotion || '-').toLowerCase();
 
         return `
-            <div class="history-item" data-index="${index}">
-                <div class="history-info" style="display:flex; align-items:center; gap:10px; pointer-events:none;">
-                    <span class="history-tag ${item.type || 'text'}" style="font-size:0.7rem; padding:3px 8px; border-radius:6px; font-weight:bold; background:${isImage ? '#fce7f3' : '#dbeafe'}; color:${isImage ? '#9d174d' : '#1e40af'};">
-                        ${(item.type || 'TEXT').toUpperCase()}
+            <li>
+                <button type="button" class="history-item" data-index="${index}">
+                    ${visual}
+                    <span class="history-main">
+                        <span class="history-text">${escapeHtml(label)}</span>
+                        <span class="history-meta"><strong>${escapeHtml(emotion)}</strong> ${escapeHtml(time)}</span>
                     </span>
-                    <span class="history-text">${isImage ? '🖼 ' : ''}${item.content.length > 30 ? item.content.substring(0, 30) + '...' : item.content}</span>
-                    <span class="history-time" style="font-size:0.75rem; color:#94a3b8;">${timeString}</span>
-                </div>
-                <div class="history-result" style="display:flex; align-items:center; gap:10px; pointer-events:none;">
-                    <strong class="history-emotion">${item.emotion || '-'}</strong>
-                    <div class="history-mini-palette" style="display:flex; gap:3px;">
-                        ${hexList.slice(0, 5).map(c => `<div class="mini-swatch" style="background:${c}"></div>`).join('')}
-                    </div>
-                </div>
-            </div>
-        `;
+                    <span class="mini-strip" aria-hidden="true">
+                        ${hexList.slice(0, 8).map(c => `<span style="background:${escapeHtml(c)}"></span>`).join('')}
+                    </span>
+                </button>
+            </li>`;
     }).join('');
 
-    document.querySelectorAll('.history-item').forEach(itemEl => {
-        itemEl.addEventListener('click', (e) => {
-            const idx = e.currentTarget.getAttribute('data-index');
-            if (window.currentHistoryData && window.currentHistoryData[idx]) {
-                loadHistoryItem(window.currentHistoryData[idx]);
-            }
+    list.querySelectorAll('.history-item').forEach(el => {
+        el.addEventListener('click', () => {
+            const item = window.currentHistoryData?.[el.dataset.index];
+            if (item) loadHistoryItem(item);
         });
     });
 }
 
 function loadHistoryItem(item) {
-    let paletteArray = [];
-    if (Array.isArray(item.palette)) paletteArray = item.palette;
-    else if (typeof item.palette === 'string') {
-        try { paletteArray = JSON.parse(item.palette); } catch (e) { paletteArray = []; }
-    }
-
-    if (item.type === 'text') {
+    const paletteArray = parsePalette(item.palette);
+    showAlert('');
+    if (item.type === 'image') {
+        if ($('textInput'))$('textInput').value = '';
+        const src = historyImageSrc(item);
+        if ($('imagePreview'))$('imagePreview').src = src;
+        if ($('extractedPaletteSection'))$('extractedPaletteSection').style.display = src ? 'block' : 'none';
+        updateUIResult(item.emotion, item.confidence || '-', paletteArray);
+    } else {
         clearImageResult();
         if ($('textInput'))$('textInput').value = item.content;
         updateUIResult(item.emotion, item.confidence || '-');
-    } else if (item.type === 'image') {
-        if ($('textInput'))$('textInput').value = '';
-        if ($('extractedPaletteSection'))$('extractedPaletteSection').style.display = 'block';
-        if ($('imagePreview'))$('imagePreview').src = item.content;
-        
-        updateUIResult(item.emotion, item.confidence || '-', paletteArray);
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('resultSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function updateUIResult(emotionKey, confidence, customPalette = null) {
-    const resultData = emotionRules[emotionKey] || emotionRules['JOY'];
+    const key = String(emotionKey || '').toUpperCase();
+    const resultData = emotionRules[key] || emotionRules['JOY'];
 
-    if ($('emotionLabel'))$('emotionLabel').innerText = emotionKey;
+    $('resultSection')?.classList.remove('is-empty');
+    if ($('emotionLabel'))$('emotionLabel').innerText = key.toLowerCase();
     if ($('confidenceValue'))$('confidenceValue').innerText = confidence;
     if ($('themeName'))$('themeName').innerText = resultData.theme;
     if ($('fontPairing'))$('fontPairing').innerText = resultData.font;
     if ($('usageContext'))$('usageContext').innerText = resultData.context;
 
     activePaletteData = customPalette || resultData.palette;
-
-    if ($('paletteDisplay')) {$('paletteDisplay').innerHTML = renderSwatches(activePaletteData);
-    }
-
-    if (resultData.fontFamily) {
-        document.body.style.fontFamily = resultData.fontFamily;
-    }
-
-    startPaletteBackgroundAnimation(activePaletteData);
+    if ($('paletteDisplay'))$('paletteDisplay').innerHTML = renderSwatches(activePaletteData);
+    applyAccent(activePaletteData);
 }
 
 // ==========================================
@@ -668,6 +730,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearHistoryBtn = $('clearHistoryBtn');
 
     if (clearHistoryBtn) clearHistoryBtn.addEventListener('click', openConfirmModal);
+
+    // Click a colour chip to copy its HEX code.
+    $('paletteDisplay')?.addEventListener('click', (e) => {
+        const chip = e.target.closest('.chip');
+        if (chip) copyText(chip.dataset.hex, chip.dataset.hex);
+    });
+
+    // Ctrl/Cmd + Enter analyses the text.
+    textInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) analyzeBtn?.click();
+    });
+
+    // Close the confirm dialog with Escape or a click outside it.
+    $('confirmModal')?.addEventListener('click', (e) => { if (e.target.id === 'confirmModal') closeConfirmModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeConfirmModal(); });
     if ($('modalCancelBtn'))$('modalCancelBtn').addEventListener('click', closeConfirmModal);
     if ($('modalConfirmBtn'))$('modalConfirmBtn').addEventListener('click', executeClearHistory);
 
@@ -711,11 +788,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const img = new Image();
                 img.onload = () => {
+                    // Analyse a downscaled copy: fast even for large photos.
+                    const scale = Math.min(1, 160 / Math.max(img.width, img.height));
                     const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    canvas.width = Math.max(1, Math.round(img.width * scale));
+                    canvas.height = Math.max(1, Math.round(img.height * scale));
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
                     const rgbData = extractRGBColors(ctx, canvas.width, canvas.height, 8);
                     const imageEmotion = analyzeColorSentiment(rgbData.rgbList);
@@ -723,7 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const confidence = t('ประเมินจากโทนสี', 'Colour-tone estimate');
                     
                     updateUIResult(imageEmotion, confidence, rgbData.hexList);
-                    saveToHistory('image', imageDataUrl, imageEmotion, confidence, rgbData.hexList);
+                    saveToHistory('image', file.name, imageEmotion, confidence, rgbData.hexList, makeThumbnail(img));
                 };
                 img.onerror = () => showAlert(t('เปิดไฟล์รูปนี้ไม่ได้ (ไฟล์อาจเสียหาย)', 'Could not open this image (file may be corrupted).'));
                 img.src = imageDataUrl;
@@ -754,7 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             clearImageResult();
             analyzeBtn.disabled = true;
-            if ($('emotionLabel'))$('emotionLabel').innerText = t('กำลังวิเคราะห์...', 'Analyzing...');
+            analyzeBtn.innerText = translations[currentLang].analyzing;
 
             try {
                 const classifier = await getAIPipeline();
@@ -769,8 +848,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('AI model unavailable, using keyword fallback:', err);
                 const fallback = keywordEmotion(text);
                 if (!fallback.label) {
-                    if ($('emotionLabel'))$('emotionLabel').innerText = '-';
-                    if ($('confidenceValue'))$('confidenceValue').innerText = '0%';
                     showAlert(err?.message === 'MODEL_TIMEOUT'
                         ? t('โมเดล AI ยังดาวน์โหลดไม่เสร็จ และโหมดสำรองไม่พบคำบ่งบอกอารมณ์ในข้อความนี้ — รอให้ขึ้น ✅ แล้วกดวิเคราะห์อีกครั้ง',
                             'AI model is still downloading and the offline mode found no emotion words — wait for ✅ and analyze again.')
@@ -789,6 +866,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } finally {
                 analyzeBtn.disabled = false;
+                analyzeBtn.innerText = translations[currentLang].analyzeBtn;
             }
         });
     }
