@@ -118,3 +118,25 @@ def test_statistics_and_insight(seeded):
 def test_statistics_empty(service):
     assert service.statistics() == {"total": 0, "by_emotion": {},
                                     "average_confidence": 0.0}
+
+
+def test_same_text_updates_instead_of_duplicating(service):
+    first = service.analyze("Joy is here")
+    assert service.last_was_duplicate is False
+    again = service.analyze("  joy   IS here ")
+    assert service.last_was_duplicate is True
+    assert again.id == first.id
+    assert len(service.list_history()) == 1
+
+
+def test_different_text_is_saved_separately(service):
+    service.analyze("joy one")
+    service.analyze("joy two")
+    assert service.last_was_duplicate is False
+    assert len(service.list_history()) == 2
+
+
+def test_analyze_without_save_never_marks_duplicate(service):
+    service.analyze("joy")
+    service.analyze("joy", save=False)
+    assert service.last_was_duplicate is False

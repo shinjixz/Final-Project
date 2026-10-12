@@ -8,12 +8,12 @@
 
 ## 👥 สมาชิกในทีมและบทบาทหมุนเวียน
 
-| สมาชิก | Sprint 1 | Sprint 2 | Sprint 3 | Final |
+| สมาชิก | Sprint 1 | Sprint 2 | Sprint 3 | Final Sprint (ความเชี่ยวชาญ) |
 | :--- | :--- | :--- | :--- | :--- |
-| นายกฤษฎา สายวัน (กาย) | Planner | Coder | Debugger | Coder |
-| นายปฏิภาณ นามสีลี (ท็อป) | Coder | Planner | Coder | Debugger |
-| นายปฏิพัฒน์ หอทอง (ปลั๊ก) | Coder | Debugger | Coder | Planner |
-| นายภีรภัทร ด่านภูมิพัฒนา (ภีม) | Debugger | Coder | Planner | Coder |
+| นายกฤษฎา สายวัน (กาย) | Planner | Coder | Debugger | Core Logic Lead |
+| นายปฏิภาณ นามสีลี (ท็อป) | Coder | Planner | Coder | AI & Web Lead |
+| นายปฏิพัฒน์ หอทอง (ปลั๊ก) | Coder | Debugger | Coder | DevOps Lead |
+| นายภีรภัทร ด่านภูมิพัฒนา (ภีม) | Debugger | Coder | Planner | QA & Testing Lead |
 
 ---
 
@@ -207,6 +207,8 @@ classDiagram
 - [x] CI: flake8 + pytest (coverage ≥ 80%) + smoke test บน Python 3.10–3.12; deploy เว็บเฉพาะเมื่อเทสต์ผ่าน
 - [x] Benchmark จริงด้วย `scripts/benchmark.py`
 - [x] เอกสาร: README, PLAN, คู่มือผู้ใช้ (`docs/USER_GUIDE.md`), สเปกโมดูล (`docs/API.md`)
+- [x] วิเคราะห์ข้อความเดิมซ้ำ → อัปเดตรายการเดิม ไม่บันทึกซ้ำ (CLI และเว็บ)
+- [x] เว็บแสดงผลได้ทันทีแม้โมเดลยังโหลดไม่เสร็จ และเก็บประวัติได้ 200 รายการ
 
 ---
 
@@ -218,7 +220,7 @@ classDiagram
 │                                                     │
 │  ┌──────────────┐  ┌─────────────────────────────┐  │
 │  │  CLIApp       │  │  Web Dashboard (index.html) │  │
-│  │  (cli_app.py) │  │  Glassmorphism UI + TH/EN   │  │
+│  │  (cli_app.py) │  │  Minimal UI + TH/EN         │  │
 │  └──────┬───────┘  └──────────┬──────────────────┘  │
 ├─────────┼──────────────────────┼─────────────────────┤
 │         │   BUSINESS LOGIC LAYER                    │
@@ -266,6 +268,9 @@ classDiagram
 | RF-10 | `emotion_client.py` | ผูกกับ transformers แน่น ถ้าโหลดโมเดลไม่ได้โปรแกรมเปิดไม่ขึ้น | Strategy pattern + `FallbackEmotionClient` + lazy import | เดโมได้แม้ไม่มีเน็ต |
 | RF-11 | `web/app.js` | ค่าความมั่นใจของรูปมาจาก `Math.random()`, เมื่อ AI ล่มแสดง `SADNESS 99.5%` ตายตัว, import CDN ที่บรรทัดแรกทำให้ทั้งหน้าพังถ้า CDN ล่ม, เรียก `localhost:3000` ที่ไม่มีอยู่ | lazy `import()`, keyword fallback ที่ตรงกับ Python, แสดงข้อความเตือนจริง, ลบ API ที่ไม่มีอยู่ | ผลลัพธ์ซื่อตรง หน้าเว็บไม่พังเมื่อ CDN ล่ม |
 | RF-12 | `.github/workflows` | Workflow มีแค่ deploy ไม่มี lint/test | เพิ่ม `ci.yml` และให้ deploy รอเทสต์ผ่าน | CI/CD ครบตามเกณฑ์ |
+| RF-13 | `web/app.js` | โหลดโมเดลครั้งแรกนานจนผู้ใช้คิดว่าเว็บค้าง | โหลดโมเดลเบื้องหลังตั้งแต่เปิดหน้า แสดงผลด่วนจาก keyword ทันที แล้วอัปเดตเป็นผล AI อัตโนมัติ | ผู้ใช้เห็นผลทันที ไม่ต้องรอ |
+| RF-14 | `web/app.js` | ประวัติเก็บแค่ 10 รายการ, รูปแสดงเป็นข้อความ base64, บันทึกซ้ำได้ไม่จำกัด | ประวัติ 200 รายการ + แบ่งหน้า + ลบรายการ, เก็บรูปย่อ JPEG, กันซ้ำด้วย key ของข้อความ/รูป, จัดการพื้นที่เต็ม | ประวัติใช้งานได้จริง ไม่รก |
+| RF-15 | `analysis_service.py`, `data_store.py` | CLI บันทึกข้อความเดิมซ้ำได้ | `find_by_text()` + อัปเดตรายการเดิมเมื่อข้อความซ้ำ | ข้อมูลไม่ซ้ำซ้อน |
 
 ---
 
@@ -275,7 +280,7 @@ classDiagram
 
 - **Modular Layer Separation:** แยกโมดูลตามหน้าที่ (NLP, Color Engine, Visualizer, Data, Report) ทำให้สมาชิกหมุนเวียนบทบาทและทำงานคู่ขนานกันได้
 - **Defensive Programming:** ตรวจชนิดข้อมูลและ Input ทุกจุดสำคัญ ทำให้ CLI ไม่ล่มเมื่อเจอข้อมูลผิดรูปแบบ
-- **Full-Stack Extension:** ต่อยอดจาก Python CLI ไปสู่ Web Dashboard สไตล์ Glassmorphism ที่ประมวลผลฝั่งเบราว์เซอร์ และ Deploy บน GitHub Pages อัตโนมัติ
+- **Full-Stack Extension:** ต่อยอดจาก Python CLI ไปสู่ Web Dashboard ที่ประมวลผลฝั่งเบราว์เซอร์ และ Deploy บน GitHub Pages อัตโนมัติ (Final Sprint ปรับเป็น UI มินิมอล)
 
 ### ⚠️ Whoops! (ปัญหาที่พบและการแก้ไข)
 

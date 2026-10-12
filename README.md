@@ -13,7 +13,7 @@
 | 📦 Sprint 1 | Core System & OOP CLI | Emotion Classifier, Palette Engine, Visualizer, CLI Loop, Unit Test เบื้องต้น | [📄SPRINT1](./Sprint1/README.md) |
 | 📦 Sprint 2 | Persistence, Report & AI Advisory | SQLite (ออกแบบ schema Supabase ไว้ต่อยอด), Export JSON/CSS, Batch CSV, AI Advisory, WCAG Checker | [📄SPRINT2](./Sprint2/README.md) |
 | 📦 Sprint 3 | Web Dashboard & Deployment | Glassmorphism UI, Bilingual TH/EN, Image Mood Input, GitHub Actions CI/CD | [📄SPRINT3](./Sprint3/README.md) |
-| 📦 Final | DevOps, CI/CD & Hardening | CRUD + Search/Filter/Sort, Service Layer, Fallback AI, 120 tests, CI lint/test, Benchmark | [📄PLAN](./PLAN.md) · [📄CHANGELOG](./CHANGELOG.md) |
+| 📦 Final | DevOps, CI/CD & Hardening | CRUD + Search/Filter/Sort, Service Layer, Fallback AI, เว็บมินิมอล + ประวัติ 200 รายการ, 125 tests, CI lint/test, Benchmark | [📄PLAN](./PLAN.md) · [📄CHANGELOG](./CHANGELOG.md) |
 
 ---
 
@@ -30,14 +30,14 @@
 
 ### 🔄 สมาชิกในทีมและการหมุนเวียนบทบาท (Role Rotation Matrix)
 
-เพื่อให้สมาชิกทุกคนในทีมได้ฝึกฝนทั้ง 3 บทบาทหลัก (Planner / Architect, Coder / Dev, Debugger / QA & DevOps) ครบทุกคน 100%:
+Sprint 1–3 หมุนเวียน 3 บทบาท (Planner / Architect, Coder / Dev, Debugger / QA) ครบทุกคน ส่วน Final Sprint ตามคู่มือรายวิชาเปลี่ยนเป็นการทำงานตามความเชี่ยวชาญเฉพาะบุคคล:
 
-| สมาชิก | ชื่อเล่น | Sprint 1 : OOP & SQLite | Sprint 2 : AI, Report & Supabase | Sprint 3 : Web & Deployment | Final |
+| สมาชิก | ชื่อเล่น | Sprint 1 : OOP & SQLite | Sprint 2 : AI & Report | Sprint 3 : Web & Deployment | Final Sprint (ความเชี่ยวชาญ) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| นายกฤษฎา สายวัน | กาย | Planner | Coder | Debugger | Coder |
-| นายปฏิภาณ นามสีลี | ท็อป | Coder | Planner | Coder | Debugger |
-| นายปฏิพัฒน์ หอทอง | ปลั๊ก | Coder | Debugger | Coder | Planner |
-| นายภีรภัทร ด่านภูมิพัฒนา | ภีม | Debugger | Coder | Planner | Coder |
+| นายกฤษฎา สายวัน | กาย | Planner | Coder | Debugger | Core Logic Lead — OOP, Service Layer, SQLite |
+| นายปฏิภาณ นามสีลี | ท็อป | Coder | Planner | Coder | AI & Web Lead — โมเดล NLP, หน้าเว็บ, TH/EN |
+| นายปฏิพัฒน์ หอทอง | ปลั๊ก | Coder | Debugger | Coder | DevOps Lead — GitHub Actions CI/CD, Deploy |
+| นายภีรภัทร ด่านภูมิพัฒนา | ภีม | Debugger | Coder | Planner | QA & Testing Lead — pytest, Edge cases, WCAG |
 
 ---
 
@@ -49,7 +49,7 @@
 | :--- | :---: | :---: | :--- |
 | บรรลุวัตถุประสงค์กลุ่ม | 30% | 9.0 | พัฒนาฟีเจอร์ครบตามแผนทั้ง 3 Sprints ได้แก่ Emotion Classifier, Color Psychology Mapping, CLI, SQLite, Export JSON/CSS, Batch CSV, AI Advisory, WCAG Checker และ Web Dashboard 2 ภาษา (TH/EN) พร้อม Deploy บน GitHub Pages |
 | ความสอดคล้องของเนื้อหาและมาตรฐานของงาน | 30% | 9.5 | ออกแบบโมดูลเชิงวัตถุ (OOP) แยกหน้าที่ชัดเจนตามหลัก Separation of Concerns (`EmotionClient`, `PaletteEngine`, `PaletteVisualizer`, `DataStore`, `ReportGenerator`, `AIAdvisory`, `CLIApp`) มี Defensive Fallback และ Input Validation |
-| ปริมาณ คุณภาพ และธรรมาภิบาลของงาน | 30% | 9.0 | มีชุดทดสอบอัตโนมัติด้วย `pytest` (120 test cases, coverage ~92%), เอกสารรายงานประจำ Sprint และ CI/CD (Lint + Test + Deploy) ด้วย GitHub Actions |
+| ปริมาณ คุณภาพ และธรรมาภิบาลของงาน | 30% | 9.0 | มีชุดทดสอบอัตโนมัติด้วย `pytest` (125 test cases, coverage ~92%), เอกสารรายงานประจำ Sprint และ CI/CD (Lint + Test + Deploy) ด้วย GitHub Actions |
 | ภาพรวมงานกลุ่มทั้งหมด | 10% | 9.5 | ทำงานเสร็จตามกำหนดทุก Sprint ร่วมมือกันตามบทบาท และมีการหมุนเวียนบทบาท (Role Rotation Matrix) ครบทั้ง 3 หน้าที่ทุกคน |
 | **รวม (ถ่วงน้ำหนัก)** | **100%** | **≈ 9.20 / 10** | ผลงานเสร็จสมบูรณ์ครบทั้ง Core Engine, Persistence, AI Advisory และ Web Deployment |
 
@@ -106,7 +106,7 @@
 - **AI Design Advisory + Insight Report** (`src/ai_advisory.py`) แนะนำธีม ฟอนต์ การใช้งาน และสรุปสถิติประวัติอัตโนมัติ (Automation Agent)
 
 ### 💾 ข้อมูลและอัลกอริทึม
-- **CRUD ครบ** ผ่าน `AnalysisService` → `DataStore` (SQLite): สร้าง / อ่าน / แก้ไขข้อความแล้ววิเคราะห์ใหม่ / ลบ / ล้างทั้งหมด
+- **CRUD ครบ** ผ่าน `AnalysisService` → `DataStore` (SQLite): สร้าง / อ่าน / แก้ไขข้อความแล้ววิเคราะห์ใหม่ / ลบ / ล้างทั้งหมด — ข้อความเดิม (ไม่สนตัวพิมพ์และช่องว่าง) จะอัปเดตรายการเดิมแทนการบันทึกซ้ำ
 - **Search** ค้นหาจากข้อความ อารมณ์ หรือรหัสสี (ไม่สนตัวพิมพ์เล็ก-ใหญ่)
 - **Filter** ตามอารมณ์ ช่วงความมั่นใจ และช่วงวันที่ (ตรวจค่าผิดพลาดทุกกรณี)
 - **Sort** ได้ 5 ฟิลด์ + เรียงหลายคีย์ (Stable sort)
@@ -124,8 +124,9 @@
 | บนเว็บ: CDN ล่ม, ไฟล์ไม่ใช่รูป, รูปเกิน 10 MB, รูปเสีย, localStorage เต็ม | แจ้งเตือนในหน้าเว็บ หน้าเว็บยังใช้งานได้ |
 
 ### 🌐 Web Dashboard (`web/`)
-- Glassmorphism UI, สลับภาษา TH/EN, สกัดสีจากรูปภาพ, Export ASE / JSON / Figma tokens / HEX / RGB / HSL / Tailwind / CSS Vars
-- AI ทำงานบนเบราว์เซอร์ผู้ใช้ (Transformers.js) — โหลดแบบ lazy ถ้า CDN ล่มจะใช้ `web/keyword_fallback.js` แทน
+- UI มินิมอล คอลัมน์เดียว รองรับมือถือ, สลับภาษา TH/EN, สกัดสีเด่นจากรูปภาพ, Export ASE / JSON / Figma tokens / HEX / RGB / HSL / Tailwind / CSS Vars, คลิกสีเพื่อคัดลอก
+- AI ทำงานบนเบราว์เซอร์ผู้ใช้ (Transformers.js) — เริ่มโหลดโมเดลทันทีที่เปิดหน้า แสดง **ผลด่วน** จาก `web/keyword_fallback.js` ก่อน แล้วอัปเดตเป็นผล AI อัตโนมัติเมื่อโหลดเสร็จ ถ้า CDN ล่มก็ยังใช้งานได้
+- ประวัติในเบราว์เซอร์สูงสุด 200 รายการ (แสดงทีละ 10, ลบทีละรายการ, รูปย่อของภาพ) ข้อความ/รูปเดิมที่วิเคราะห์ซ้ำจะอัปเดตรายการเดิม ไม่บันทึกซ้ำ ถ้าพื้นที่เต็มจะลบรายการเก่าสุดให้อัตโนมัติ
 
 ---
 
@@ -163,7 +164,7 @@ Final-Project/
 │   ├── visualizer.py          # Terminal swatches / PNG
 │   └── cli_app.py             # เมนู CLI
 ├── web/                       # index.html, style.css, app.js, keyword_fallback.js
-├── tests/                     # 120 unit/integration tests
+├── tests/                     # 125 unit/integration tests
 ├── scripts/benchmark.py       # วัดความเร็ว
 ├── docs/                      # USER_GUIDE.md, API.md, BENCHMARK.md
 ├── data/sample_batch.csv
@@ -201,7 +202,7 @@ flake8 && pytest --cov=src
 python scripts/benchmark.py
 ```
 
-🌐 เว็บออนไลน์: https://peeraphatda.github.io/Final-Project/
+🌐 เว็บออนไลน์: https://shinjixz.github.io/Final-Project/
 
 ---
 
@@ -216,7 +217,7 @@ python scripts/benchmark.py
 
 ผลวัดจริงจาก `scripts/benchmark.py` (รายละเอียดใน [docs/BENCHMARK.md](./docs/BENCHMARK.md)): กับข้อมูล **10,000 แถว** ค้นหา ~5 ms, กรอง ~1 ms, เรียงลำดับ ~2 ms, เรียงหลายคีย์ ~3 ms
 
-**เว็บ:** เป็น static site และโมเดล AI รันบนเครื่องผู้ใช้แต่ละคน ฝั่งเซิร์ฟเวอร์จึงไม่ต้องประมวลผล จำนวนผู้ใช้พร้อมกันถูกจำกัดโดยโควตาของ GitHub Pages (soft limit แบนด์วิดท์ ~100 GB/เดือน) ไม่ใช่โค้ดของเรา ไฟล์โมเดลโหลดจาก CDN ของ Hugging Face จึงไม่กินโควตานี้
+**เว็บ:** เป็น static site และโมเดล AI รันบนเครื่องผู้ใช้แต่ละคน ฝั่งเซิร์ฟเวอร์จึงไม่ต้องประมวลผล จำนวนผู้ใช้ถูกจำกัดโดยโควตาของ GitHub Pages (soft limit แบนด์วิดท์ ~100 GB/เดือน) ไม่ใช่โค้ดของเรา หน้าเว็บทั้งหมด ~58 KB จึงรองรับได้ราว 1.7 ล้านครั้งเข้าชม/เดือน (คำนวณจากโควตา ยังไม่ได้ทำ load test) ไฟล์โมเดลโหลดจาก CDN ของ Hugging Face จึงไม่กินโควตานี้ และเบราว์เซอร์เก็บโมเดลไว้หลังโหลดครั้งแรก
 
 **CLI:** ออกแบบให้ใช้คนเดียวต่อเครื่อง (SQLite ไฟล์เดียว) — ถ้าจะให้หลายคนใช้ร่วมกันต้องย้ายไป PostgreSQL + API (ดูแผนต่อยอดใน PLAN.md)
 

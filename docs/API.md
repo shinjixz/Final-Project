@@ -71,6 +71,7 @@ Keyword score = `(คำที่ตรงอารมณ์ชนะ / คำ�
 | `add(record) -> AnalysisRecord` | Create (เติม `id`) |
 | `get(id) -> AnalysisRecord` | Read / `RecordNotFoundError` |
 | `list_all()` / `get_history(limit)` | Read (ใหม่สุดก่อน) |
+| `find_by_text(text)` | รายการล่าสุดที่ข้อความตรงกัน (ไม่สนตัวพิมพ์/ช่องว่าง) หรือ `None` |
 | `update(record)` | Update ทุกฟิลด์ / `RecordNotFoundError` |
 | `delete(id)` / `clear() -> int` / `count()` | Delete |
 | `.recovered_from` | path ไฟล์ DB เสียที่ถูกสำรองไว้ (หรือ `None`) |
@@ -81,7 +82,7 @@ Keyword score = `(คำที่ตรงอารมณ์ชนะ / คำ�
 
 | API | คำอธิบาย | ความซับซ้อน |
 | :--- | :--- | :--- |
-| `analyze(text, save=True)` | วิเคราะห์ + จานสี + บันทึก | – |
+| `analyze(text, save=True)` | วิเคราะห์ + จานสี + บันทึก ถ้าข้อความซ้ำจะอัปเดตรายการเดิม (`last_was_duplicate = True`) | – |
 | `get(id)` / `list_history(limit=None)` | อ่าน (id รับ string ได้ ตรวจให้) | – |
 | `update_text(id, text)` | แก้ข้อความและวิเคราะห์ใหม่ | – |
 | `delete(id)` / `clear_history()` | ลบ | – |

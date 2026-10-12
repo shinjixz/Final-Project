@@ -33,10 +33,16 @@ class AnalysisService:
         self.store = store
         self.palette_engine = palette_engine
         self.advisory = advisory
+        self.last_was_duplicate = False
 
     # ---------------------------------------------------------------- CRUD
     def analyze(self, text: str, save: bool = True) -> AnalysisRecord:
-        """Create: analyse text, build palette and (optionally) save it."""
+        """Create: analyse text, build palette and (optionally) save it.
+
+        If the same text (ignoring case and extra spaces) is already saved,
+        the existing record is updated instead of adding a duplicate;
+        ``last_was_duplicate`` tells the caller which one happened.
+        """
         text = validate_text(text)
         result = self.analyzer.get_emotion(text)
         record = AnalysisRecord(
@@ -45,7 +51,18 @@ class AnalysisService:
             confidence=result.score,
             hex_colors=self.palette_engine.get_palette(result.label),
         )
-        return self.store.add(record) if save else record
+        self.last_was_duplicate = False
+        if not save:
+            return record
+        existing = self.store.find_by_text(text)
+        if existing is not None:
+            existing.input_text = record.input_text
+            existing.emotion = record.emotion
+            existing.confidence = record.confidence
+            existing.hex_colors = record.hex_colors
+            self.last_was_duplicate = True
+            return self.store.update(existing)
+        return self.store.add(record)
 
     def get(self, record_id: int) -> AnalysisRecord:
         return self.store.get(self._parse_id(record_id))

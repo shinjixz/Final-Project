@@ -76,3 +76,9 @@ def test_ctrl_c_exits_gracefully(service):
     output = []
     CLIApp(service, input_func=interrupt, output_func=output.append).run()
     assert "ยกเลิกการทำงาน" in output[-1]
+
+
+def test_duplicate_text_is_not_saved_twice(service):
+    out = run(service, "1", "joy again", "1", "JOY again", "0")
+    assert "อัปเดตรายการเดิม id=1" in out
+    assert len(service.list_history()) == 1

@@ -135,6 +135,17 @@ class DataStore:
         )
         return [self._row_to_record(row) for row in rows]
 
+    def find_by_text(self, text: str) -> Optional[AnalysisRecord]:
+        """Return the newest record with the same text (case/space-insensitive)."""
+        normalized = " ".join(text.split()).lower()
+        rows, _, _ = self._execute(
+            f"SELECT {_COLUMNS} FROM palette_history ORDER BY id DESC"
+        )
+        for row in rows:
+            if " ".join(row[1].split()).lower() == normalized:
+                return self._row_to_record(row)
+        return None
+
     def update(self, record: AnalysisRecord) -> AnalysisRecord:
         """Update every field of an existing record."""
         if record.id is None:

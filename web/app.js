@@ -580,6 +580,26 @@ function applyAccent(colorList) {
     document.documentElement.style.setProperty('--accent', accent);
 }
 
+// Two entries are the same if they are the same text (ignoring case and extra
+// spaces) or the same image file with the same colours.
+function historyKey(item) {
+    if (item.type === 'image') {
+        const colors = parsePalette(item.palette).map(c => (typeof c === 'string' ? c : c.hex)).join('');
+        return `image|${item.content}|${colors}`.toLowerCase();
+    }
+    return 'text|' + String(item.content || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function dedupeHistory(items) {
+    const seen = new Set();
+    return items.filter(it => {
+        const key = historyKey(it);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
 function readHistory() {
     try {
         const data = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
@@ -619,7 +639,14 @@ function saveToHistory(type, inputContent, emotion, confidence, palette, thumb =
         palette,
         createdAt: new Date().toISOString()
     };
-    writeHistory([newItem, ...readHistory()]);
+    // Same text/image analysed again: replace the old entry instead of adding a copy.
+    const existing = readHistory();
+    const key = historyKey(newItem);
+    const rest = existing.filter(it => historyKey(it) !== key);
+    if (rest.length < existing.length) {
+        toast(t('เคยวิเคราะห์ข้อความนี้แล้ว อัปเดตรายการเดิมแทนการบันทึกซ้ำ', 'Already in history: updated the existing entry'));
+    }
+    writeHistory([newItem, ...rest]);
     renderHistoryList();
     return newItem.id;
 }
@@ -675,10 +702,13 @@ function renderHistoryList() {
     const tr = translations[currentLang];
 
     const allItems = readHistory();
-    // Older entries have no id: give them one so they can be deleted/updated.
-    if (allItems.some(it => !it.id)) {
-        allItems.forEach((it, i) => { if (!it.id) it.id = 'old' + i + Date.now().toString(36); });
-        writeHistory(allItems);
+    // Older entries: give them an id and remove duplicates saved before this check existed.
+    const cleaned = dedupeHistory(allItems);
+    if (cleaned.length < allItems.length || cleaned.some(it => !it.id)) {
+        cleaned.forEach((it, i) => { if (!it.id) it.id = 'old' + i + Date.now().toString(36); });
+        writeHistory(cleaned);
+        allItems.length = 0;
+        allItems.push(...cleaned);
     }
     const historyData = allItems.slice(0, historyShown);
     if (historyData.length === 0) {

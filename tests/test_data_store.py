@@ -92,3 +92,9 @@ def test_storage_error_when_table_dropped(store):
     conn.close()
     with pytest.raises(StorageError):
         store.list_all()
+
+
+def test_find_by_text_ignores_case_and_spaces(store):
+    store.add(make("Hello  World"))
+    assert store.find_by_text("hello world").input_text == "Hello  World"
+    assert store.find_by_text("other") is None

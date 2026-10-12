@@ -103,7 +103,11 @@ class CLIApp:
         if getattr(self.service.analyzer, "last_error", None):
             self._print("ℹ️ ใช้โหมดสำรอง (keyword) เพราะโมเดล AI ไม่พร้อม")
         self.show_palette(record.hex_colors)
-        self._print(f"✅ บันทึกแล้ว id={record.id}")
+        if self.service.last_was_duplicate:
+            self._print(f"ℹ️ ข้อความนี้มีในประวัติแล้ว "
+                        f"อัปเดตรายการเดิม id={record.id} แทนการบันทึกซ้ำ")
+        else:
+            self._print(f"✅ บันทึกแล้ว id={record.id}")
 
     def do_list(self) -> None:
         self.show_records(self.service.list_history())
