@@ -109,24 +109,19 @@ CLOUD_SYNC_URL=https://example.com/api python main.py --sync
 ## 📂 ไฟล์ที่เกี่ยวข้อง
 
 ```
-sprint2/
+Sprint2/
 ├── src/
-│   ├── emotion_client.py     ← (Sprint 1) HF Pipeline + Fallback
-│   ├── palette_engine.py     ← Emotion→Palette + WCAG (ขยาย)
-│   ├── visualizer.py         ← (Sprint 1) Matplotlib Swatches
-│   ├── data_store.py         ← SQLite + Cloud Sync
-│   ├── report_generator.py   ← JSON/CSS Export + Batch CSV
-│   ├── ai_advisory.py        ← Design Concept + Font Pairings
-│   └── cli_app.py            ← Interactive CLI (ขยาย)
-├── tests/
-│   ├── test_emotion_client.py     ← 7 tests (Sprint 1)
-│   ├── test_data_store.py         ← 7 tests
-│   ├── test_report_generator.py   ← 6 tests
-│   ├── test_ai_advisory.py        ← 10 tests
-│   ├── test_palette_wcag.py       ← 13 tests
-│   └── test_cli_integration.py    ← 3 tests
-├── data/                     ← palette_history.db (สร้างอัตโนมัติ)
-├── main.py
-├── requirements.txt
+│   ├── ai_advisory.py       ← AI Advisory (คำแนะนำสี/พาเลตต์)
+│   ├── cli_app.py           ← Interactive CLI
+│   ├── data_store.py        ← Data Persistence (File I/O)
+│   ├── palette_engine.py    ← Emotion→Palette + WCAG
+│   └── report_generator.py  ← Report Generator
+├── test/
+│   ├── test_ai_advisory.py          ← ทดสอบ AI Advisory
+│   ├── test_cli_integration.py      ← ทดสอบ CLI Integration
+│   ├── test_data_store.py           ← ทดสอบ Data Store
+│   ├── test_palette_wcag.py         ← ทดสอบ Palette + WCAG
+│   └── test_report_generator.py     ← ทดสอบ Report Generator
+├── main.py                  ← Entry Point
 └── README.md
 ```
