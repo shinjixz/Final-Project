@@ -1,10 +1,12 @@
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+import { EMOTION_LABELS, keywordEmotion } from './keyword_fallback.js';
 
-env.allowLocalModels = false;
+// The AI library is imported lazily inside getAIPipeline(): if the CDN is down
+// the rest of the page still works and the keyword fallback takes over.
+const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+const MAX_TEXT_LENGTH = 1000;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 const $ = id => document.getElementById(id);
-
-const API_BASE_URL = 'http://localhost:3000/api/history';
 
 let currentLang = 'TH';
 let paletteAnimationTimer = null;
@@ -420,9 +422,26 @@ const renderSwatches = colors => {
 async function getAIPipeline() {
     if (!sentimentPipeline) {
         if ($('emotionLabel'))$('emotionLabel').innerText = "Loading AI...";
+        const { pipeline, env } = await import(TRANSFORMERS_CDN);
+        env.allowLocalModels = false;
         sentimentPipeline = await pipeline('zero-shot-classification', 'Xenova/distilbert-base-uncased-mnli');
     }
     return sentimentPipeline;
+}
+
+// ==========================================
+// 🛟 UI HELPERS
+// ==========================================
+
+function showAlert(message) {
+    const box = $('alertBox');
+    if (!box) return;
+    box.innerText = message || '';
+    box.style.display = message ? 'block' : 'none';
+}
+
+function t(th, en) {
+    return currentLang === 'TH' ? th : en;
 }
 
 function hexToSoftRgba(hex, opacity = 0.22) {
@@ -468,16 +487,13 @@ function saveToHistory(type, inputContent, emotion, confidence, palette) {
         if (localData.length > 10) localData.pop();
         localStorage.setItem('sentiment_history', JSON.stringify(localData));
     } catch (e) {
+        // Quota full (large images) or storage blocked: keep working without history.
         console.error("LocalStorage error:", e);
+        showAlert(t('บันทึกประวัติไม่ได้ (พื้นที่เบราว์เซอร์เต็มหรือถูกปิด) แต่ผลวิเคราะห์ยังใช้ได้ตามปกติ',
+            'Could not save history (browser storage full or blocked); results still work.'));
     }
 
     renderHistoryList();
-
-    fetch(API_BASE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newItem)
-    }).catch(err => console.warn("Backend API not reachable:", err));
 }
 
 function openConfirmModal() {
@@ -489,7 +505,7 @@ function closeConfirmModal() {
 }
 
 function executeClearHistory() {
-    localStorage.removeItem('sentiment_history');
+    try { localStorage.removeItem('sentiment_history'); } catch (e) { console.error(e); }
     renderHistoryList();
     closeConfirmModal();
 }
@@ -567,13 +583,13 @@ function loadHistoryItem(item) {
     if (item.type === 'text') {
         clearImageResult();
         if ($('textInput'))$('textInput').value = item.content;
-        updateUIResult(item.emotion, item.confidence || '95.0%');
+        updateUIResult(item.emotion, item.confidence || '-');
     } else if (item.type === 'image') {
         if ($('textInput'))$('textInput').value = '';
         if ($('extractedPaletteSection'))$('extractedPaletteSection').style.display = 'block';
         if ($('imagePreview'))$('imagePreview').src = item.content;
         
-        updateUIResult(item.emotion, item.confidence || '95.0%', paletteArray);
+        updateUIResult(item.emotion, item.confidence || '-', paletteArray);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -633,6 +649,17 @@ document.addEventListener('DOMContentLoaded', () => {
         imageInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
+            showAlert('');
+            if (!file.type.startsWith('image/')) {
+                showAlert(t('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'Please choose an image file.'));
+                imageInput.value = '';
+                return;
+            }
+            if (file.size > MAX_IMAGE_BYTES) {
+                showAlert(t('ไฟล์รูปใหญ่เกิน 10 MB', 'Image is larger than 10 MB.'));
+                imageInput.value = '';
+                return;
+            }
 
             if (textInput) textInput.value = '';
 
@@ -652,11 +679,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const rgbData = extractRGBColors(ctx, canvas.width, canvas.height, 8);
                     const imageEmotion = analyzeColorSentiment(rgbData.rgbList);
-                    const confidence = (90 + Math.floor(Math.random() * 9)) + '.0%';
+                    // Colour-tone rule, not an AI model: no fake percentage.
+                    const confidence = t('ประเมินจากโทนสี', 'Colour-tone estimate');
                     
                     updateUIResult(imageEmotion, confidence, rgbData.hexList);
                     saveToHistory('image', imageDataUrl, imageEmotion, confidence, rgbData.hexList);
                 };
+                img.onerror = () => showAlert(t('เปิดไฟล์รูปนี้ไม่ได้ (ไฟล์อาจเสียหาย)', 'Could not open this image (file may be corrupted).'));
                 img.src = imageDataUrl;
             };
             reader.readAsDataURL(file);
@@ -673,21 +702,46 @@ document.addEventListener('DOMContentLoaded', () => {
     if (analyzeBtn) {
         analyzeBtn.addEventListener('click', async () => {
             const text = textInput ? textInput.value.trim() : '';
-            if (!text) return;
+            showAlert('');
+            if (!text) {
+                showAlert(t('กรุณากรอกข้อความก่อนวิเคราะห์', 'Please enter some text first.'));
+                return;
+            }
+            if (text.length > MAX_TEXT_LENGTH) {
+                showAlert(t(`ข้อความยาวเกิน ${MAX_TEXT_LENGTH} ตัวอักษร`, `Text is longer than ${MAX_TEXT_LENGTH} characters.`));
+                return;
+            }
 
             clearImageResult();
+            analyzeBtn.disabled = true;
 
             try {
                 const classifier = await getAIPipeline();
-                const output = await classifier(text, ['fear', 'anger', 'sadness', 'joy', 'love', 'surprise']);
-                if (output?.labels?.length > 0) {
-                    const topEmotion = output.labels[0].toUpperCase();
-                    const confidenceScore = (output.scores[0] * 100).toFixed(1) + "%";
+                const output = await classifier(text, EMOTION_LABELS);
+                if (!output?.labels?.length) throw new Error('Empty model output');
+                const topEmotion = output.labels[0].toUpperCase();
+                const confidenceScore = (output.scores[0] * 100).toFixed(1) + "%";
+                updateUIResult(topEmotion, confidenceScore);
+                saveToHistory('text', text, topEmotion, confidenceScore, emotionRules[topEmotion]?.palette);
+            } catch (err) {
+                // AI model / CDN unavailable -> honest keyword fallback, never a fake result.
+                console.warn('AI model unavailable, using keyword fallback:', err);
+                const fallback = keywordEmotion(text);
+                if (!fallback.label) {
+                    if ($('emotionLabel'))$('emotionLabel').innerText = '-';
+                    if ($('confidenceValue'))$('confidenceValue').innerText = '0%';
+                    showAlert(t('โมเดล AI โหลดไม่สำเร็จ และโหมดสำรองไม่พบคำบ่งบอกอารมณ์ในข้อความนี้ ลองเขียนให้ชัดขึ้นหรือลองใหม่เมื่อออนไลน์',
+                        'AI model unavailable and the offline fallback found no emotion words. Try clearer text or retry when online.'));
+                } else {
+                    const topEmotion = fallback.label.toUpperCase();
+                    const confidenceScore = (fallback.score * 100).toFixed(1) + '% (offline)';
                     updateUIResult(topEmotion, confidenceScore);
                     saveToHistory('text', text, topEmotion, confidenceScore, emotionRules[topEmotion]?.palette);
+                    showAlert(t('ใช้โหมดสำรองแบบ keyword เพราะโหลดโมเดล AI ไม่สำเร็จ (ผลอาจแม่นยำน้อยกว่า)',
+                        'Using offline keyword mode because the AI model could not load (less accurate).'));
                 }
-            } catch (err) {
-                updateUIResult('SADNESS', '99.5%');
+            } finally {
+                analyzeBtn.disabled = false;
             }
         });
     }

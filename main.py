@@ -1,43 +1,61 @@
+"""Entry point.
+
+Examples
+--------
+python main.py                         # interactive CLI (AI model, falls back to keyword)
+python main.py --offline               # CLI without downloading the AI model
+python main.py --batch data/sample_batch.csv
+python main.py --db data/demo.db       # use another database file
 """
-File: main.py
-Description: Entry Point หลักสำหรับสลับโหมดการทำงาน (--cli, --batch)
-"""
-import sys
+
 import argparse
-from Sprint4.src.emotion_client import EmotionClient
-from Sprint4.src.palette_engine import PaletteEngine
-from Sprint4.src.visualizer import PaletteVisualizer
-from Sprint4.src.data_store import DataStore
-from Sprint4.src.cli_app import CLIApp
-from Sprint4.src.report_generator import ReportGenerator
+import sys
 
-def main():
-    parser = argparse.ArgumentParser(description="Smart Art & Palette Sentiment Analyzer")
-    parser.add_argument("--cli", action="store_true", help="เปิดใช้งาน Interactive CLI Mode")
-    parser.add_argument("--batch", type=str, help="รันโหมดประมวลผลไฟล์ CSV (ระบุ path ของไฟล์ เช่น data/sample_batch.csv)")
-    
-    args = parser.parse_args()
+from src.analysis_service import AnalysisService
+from src.cli_app import CLIApp
+from src.data_store import DEFAULT_DB_PATH, DataStore
+from src.emotion_client import create_emotion_client
+from src.exceptions import AppError
+from src.report_generator import ReportGenerator
 
-    print("กำลังเริ่มต้นโหลดโมเดล NLP และระบบ...")
-    # Initialize Core Modules
-    client = EmotionClient()
-    engine = PaletteEngine()
-    viz = PaletteVisualizer()
-    db = DataStore()
 
-    if args.batch:
-        print(f"\n[Batch Mode] กำลังประมวลผลไฟล์: {args.batch}...")
-        try:
-            df_result = ReportGenerator.process_batch_csv(args.batch, client, engine)
-            output_path = "data/batch_output.csv"
-            df_result.to_csv(output_path, index=False)
-            print(f"✅ ประมวลผลสำเร็จ! บันทึกผลลัพธ์ไว้ที่ {output_path}")
-        except Exception as e:
-            print(f"❌ เกิดข้อผิดพลาดในการประมวลผลไฟล์ Batch: {e}")
-    else:
-        # Default Run: Interactive CLI Application Loop
-        app = CLIApp(client, engine, viz, db)
-        app.run()
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Smart Art & Palette Sentiment Analyzer")
+    parser.add_argument("--batch", metavar="CSV",
+                        help="ประมวลผลไฟล์ CSV ที่มีคอลัมน์ 'text'")
+    parser.add_argument("--output", default="exports/batch_output.csv",
+                        help="ไฟล์ผลลัพธ์ของโหมด batch")
+    parser.add_argument("--offline", action="store_true",
+                        help="ไม่โหลดโมเดล AI ใช้ keyword analyser แทน")
+    parser.add_argument("--db", default=DEFAULT_DB_PATH, help="path ฐานข้อมูล SQLite")
+    parser.add_argument("--no-color", action="store_true",
+                        help="ไม่แสดงสีในเทอร์มินัล")
+    return parser
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+    print("กำลังเริ่มต้นระบบ...")
+    try:
+        analyzer = create_emotion_client(offline=args.offline)
+        if analyzer.last_error:
+            print(f"ℹ️ ใช้ keyword analyser แทนโมเดล AI: {analyzer.last_error}")
+        service = AnalysisService(analyzer, DataStore(args.db))
+
+        if args.batch:
+            rows = ReportGenerator.process_batch_csv(args.batch, service)
+            out = ReportGenerator.write_batch_output(rows, args.output)
+            failed = sum(1 for row in rows if row["error"])
+            print(f"✅ ประมวลผล {len(rows)} แถว (ผิดพลาด {failed}) → {out}")
+            return 0
+
+        CLIApp(service, use_color=not args.no_color).run()
+        return 0
+    except AppError as exc:
+        print(f"❌ {exc}")
+        return 1
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

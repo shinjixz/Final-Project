@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+data/*.db
+data/*.db.corrupt-*
+data/palette_preview.png
+exports/
+.venv/
+venv/

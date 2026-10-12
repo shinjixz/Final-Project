@@ -1,0 +1,4 @@
+# Optional AI model (DistilBERT). Without these the app uses the keyword analyser.
+-r requirements.txt
+transformers>=4.30.0
+torch>=2.0.0

@@ -11,8 +11,9 @@
 | Sprint | หัวข้อ | ผลงานสำคัญที่ส่งมอบ | เอกสารสรุป |
 | :--- | :--- | :--- | :--- |
 | 📦 Sprint 1 | Core System & OOP CLI | Emotion Classifier, Palette Engine, Visualizer, CLI Loop, Unit Test เบื้องต้น | [📄SPRINT1](./Sprint1/README.md) |
-| 📦 Sprint 2 | Persistence, Report & AI Advisory | SQLite + Supabase, Export JSON/CSS, Batch CSV, AI Advisory, WCAG Checker | [📄SPRINT2](./Sprint2/README.md) |
+| 📦 Sprint 2 | Persistence, Report & AI Advisory | SQLite (ออกแบบ schema Supabase ไว้ต่อยอด), Export JSON/CSS, Batch CSV, AI Advisory, WCAG Checker | [📄SPRINT2](./Sprint2/README.md) |
 | 📦 Sprint 3 | Web Dashboard & Deployment | Glassmorphism UI, Bilingual TH/EN, Image Mood Input, GitHub Actions CI/CD | [📄SPRINT3](./Sprint3/README.md) |
+| 📦 Final | DevOps, CI/CD & Hardening | CRUD + Search/Filter/Sort, Service Layer, Fallback AI, 120 tests, CI lint/test, Benchmark | [📄PLAN](./PLAN.md) · [📄CHANGELOG](./CHANGELOG.md) |
 
 ---
 
@@ -46,9 +47,9 @@
 
 | หัวข้อ | น้ำหนัก | คะแนนกลุ่ม (0-10) | เหตุผล |
 | :--- | :---: | :---: | :--- |
-| บรรลุวัตถุประสงค์กลุ่ม | 30% | 9.0 | พัฒนาฟีเจอร์ครบตามแผนทั้ง 3 Sprints ได้แก่ Emotion Classifier, Color Psychology Mapping, CLI, SQLite/Supabase, Export JSON/CSS, Batch CSV, AI Advisory, WCAG Checker และ Web Dashboard 2 ภาษา (TH/EN) พร้อม Deploy บน GitHub Pages |
+| บรรลุวัตถุประสงค์กลุ่ม | 30% | 9.0 | พัฒนาฟีเจอร์ครบตามแผนทั้ง 3 Sprints ได้แก่ Emotion Classifier, Color Psychology Mapping, CLI, SQLite, Export JSON/CSS, Batch CSV, AI Advisory, WCAG Checker และ Web Dashboard 2 ภาษา (TH/EN) พร้อม Deploy บน GitHub Pages |
 | ความสอดคล้องของเนื้อหาและมาตรฐานของงาน | 30% | 9.5 | ออกแบบโมดูลเชิงวัตถุ (OOP) แยกหน้าที่ชัดเจนตามหลัก Separation of Concerns (`EmotionClient`, `PaletteEngine`, `PaletteVisualizer`, `DataStore`, `ReportGenerator`, `AIAdvisory`, `CLIApp`) มี Defensive Fallback และ Input Validation |
-| ปริมาณ คุณภาพ และธรรมาภิบาลของงาน | 30% | 9.0 | มีชุดทดสอบอัตโนมัติด้วย `pytest` (4 ไฟล์ทดสอบ), เอกสารรายงานประจำ Sprint และ CI/CD อัตโนมัติด้วย GitHub Actions |
+| ปริมาณ คุณภาพ และธรรมาภิบาลของงาน | 30% | 9.0 | มีชุดทดสอบอัตโนมัติด้วย `pytest` (120 test cases, coverage ~92%), เอกสารรายงานประจำ Sprint และ CI/CD (Lint + Test + Deploy) ด้วย GitHub Actions |
 | ภาพรวมงานกลุ่มทั้งหมด | 10% | 9.5 | ทำงานเสร็จตามกำหนดทุก Sprint ร่วมมือกันตามบทบาท และมีการหมุนเวียนบทบาท (Role Rotation Matrix) ครบทั้ง 3 หน้าที่ทุกคน |
 | **รวม (ถ่วงน้ำหนัก)** | **100%** | **≈ 9.20 / 10** | ผลงานเสร็จสมบูรณ์ครบทั้ง Core Engine, Persistence, AI Advisory และ Web Deployment |
 
@@ -94,165 +95,135 @@
 
 ---
 
-## ✨ สรุปฟีเจอร์ทั้งหมดของระบบ (Features Overview - Fully Implemented)
+## ✨ ฟีเจอร์ของระบบ (Features)
 
-### 🟢 ฟีเจอร์แกนหลักและระบบวิเคราะห์ (Core Engine & NLP - Complete)
+### 🧠 วิเคราะห์อารมณ์และจานสี (Business Logic)
+- **Emotion Analyzer — Strategy Pattern** (`src/emotion_client.py`)
+  - `TransformerEmotionClient` ใช้โมเดล Hugging Face DistilBERT จำแนก 6 อารมณ์ (joy, sadness, anger, fear, love, surprise)
+  - `KeywordEmotionClient` โหมดออฟไลน์แบบ keyword ใช้ได้โดยไม่ต้องติดตั้ง ML library
+  - `FallbackEmotionClient` ถ้าโมเดลโหลดไม่ได้หรือพัง จะสลับไปโหมด keyword อัตโนมัติ และบอกผู้ใช้ตรง ๆ (ไม่แสดงค่าความมั่นใจปลอม)
+- **Palette Engine** (`src/palette_engine.py`) จานสี 8 สีต่ออารมณ์ (ตรงกับหน้าเว็บ 100% มีเทสต์ยืนยัน) + คำนวณ WCAG 2.1 Contrast Ratio + หา “คู่สีที่อ่านง่ายที่สุด”
+- **AI Design Advisory + Insight Report** (`src/ai_advisory.py`) แนะนำธีม ฟอนต์ การใช้งาน และสรุปสถิติประวัติอัตโนมัติ (Automation Agent)
 
-- 🧠 **Emotion Classifier** (`src/emotion_client.py`): ประมวลผลและจำแนกอารมณ์ความรู้สึกจากข้อความ 6 อารมณ์หลัก (joy, sadness, anger, fear, love, surprise) ด้วย Hugging Face DistilBERT พร้อมระบบ Defensive Fallback Unwrapping (ใช้ `isinstance` Check) ป้องกันข้อผิดพลาด
-- 🎨 **Color Psychology Mapping** (`src/palette_engine.py`): แมปอารมณ์ความรู้สึกเข้ากับกลุ่มโค้ดสี Hex 5 สี ตามหลักจิตวิทยาของสี (Color Psychology)
-- 🖼️ **Palette Visualizer** (`src/visualizer.py`): สร้างภาพตัวอย่างการจัดวางแถบสี (Color Swatch) ด้วย `matplotlib` ในโทน Dark Theme
-- 💻 **CLI Interactive Loop** (`src/cli_app.py` & `main.py`): หน้าต่างปฏิสัมพันธ์ Command Line Interface พร้อมระบบ Input Validation
+### 💾 ข้อมูลและอัลกอริทึม
+- **CRUD ครบ** ผ่าน `AnalysisService` → `DataStore` (SQLite): สร้าง / อ่าน / แก้ไขข้อความแล้ววิเคราะห์ใหม่ / ลบ / ล้างทั้งหมด
+- **Search** ค้นหาจากข้อความ อารมณ์ หรือรหัสสี (ไม่สนตัวพิมพ์เล็ก-ใหญ่)
+- **Filter** ตามอารมณ์ ช่วงความมั่นใจ และช่วงวันที่ (ตรวจค่าผิดพลาดทุกกรณี)
+- **Sort** ได้ 5 ฟิลด์ + เรียงหลายคีย์ (Stable sort)
+- **Export** จานสีเป็น `.json` / `.css` และ **Batch CSV** (แถวที่ผิดพลาดถูกบันทึกไว้ ไม่ทำให้ทั้งไฟล์ล้ม)
 
-### 🟢 ระบบบันทึกข้อมูล รายงานผล และ AI คำแนะนำ (Persistence & AI Advisory - Complete)
+### 🛡️ ความทนทานต่อข้อผิดพลาด (Error Resilience)
+| สถานการณ์ | ระบบทำอะไร |
+|---|---|
+| ไม่มีโฟลเดอร์ `data/` หรือไฟล์ DB | สร้างใหม่อัตโนมัติ |
+| ไฟล์ DB เสียหาย | ย้ายไฟล์เสียเป็น `*.corrupt-<เวลา>` แล้วสร้าง DB ใหม่ แจ้งผู้ใช้ตอนเปิดโปรแกรม |
+| โมเดล AI โหลดไม่ได้ / ไม่มีเน็ต | ใช้ keyword analyser แทน (CLI และเว็บ) |
+| ข้อความว่าง / ยาวเกิน / id ไม่ใช่ตัวเลข / id ไม่มีอยู่ | แสดง ⚠️ ข้อความเตือน โปรแกรมทำงานต่อ |
+| ไฟล์ CSV หาย / ไม่มีคอลัมน์ `text` / ไฟล์ binary | แสดงข้อความเตือน |
+| Ctrl+C / EOF | ปิดโปรแกรมอย่างสุภาพ |
+| บนเว็บ: CDN ล่ม, ไฟล์ไม่ใช่รูป, รูปเกิน 10 MB, รูปเสีย, localStorage เต็ม | แจ้งเตือนในหน้าเว็บ หน้าเว็บยังใช้งานได้ |
 
-- 💾 **History Database** (`src/data_store.py`): บันทึกประวัติการวิเคราะห์ (ข้อความ, อารมณ์, confidence, palette, timestamp) ลง Local SQLite (`palette_history.db`)
-- ☁️ **Cloud Database Migration** (`src/data_store.py`): รองรับโครงสร้างการจัดเก็บข้อมูลย้ายไปยัง Cloud Database (Supabase PostgreSQL)
-- 📤 **Palette Export** (`src/report_generator.py`): ส่งออกจานสีเป็นไฟล์ `.json` และ CSS variables เพื่อให้นักพัฒนานำไปใช้งานต่อได้ทันที
-- 📑 **Batch Processing** (`src/report_generator.py`): อ่านข้อความหลายบรรทัดจากไฟล์ `.csv` สรุปผลการวิเคราะห์เป็นชุดข้อมูลส่งออก
-- 🤖 **AI Design Advisory** (`src/ai_advisory.py`): ประมวลผลคำแนะนำด้านการออกแบบ เช่น ชื่อแนวคิดธีม (Theme Name), การจับคู่ฟอนต์ (Font Pairings), และเทคนิคการใช้งาน UI
-- ♿ **Accessibility Checker** (`src/palette_engine.py`): คำนวณ Contrast Ratio ตามมาตรฐาน WCAG 2.1 แจ้งเตือนสถานะ PASS (AAA) / PASS (AA) / FAIL
-
-### 🟢 หน้าเว็บแอปพลิเคชันและการติดตั้งระบบ (Web Dashboard & Deployment - Complete)
-
-- 🌐 **Web Dashboard Interface** (`web/index.html`): หน้าเว็บแดชบอร์ดสไตล์ Glassmorphism UI สำหรับพิมพ์ข้อความ วิเคราะห์อารมณ์ และแสดงจานสี
-- 🌏 **Bilingual UI Support** (`web/style.css`, `web/app.js`): ระบบสลับภาษาการแสดงผลหน้าเว็บได้ 2 ภาษา (ไทย/อังกฤษ - TH/EN Toggle)
-- 📷 **Image Mood Input** (`web/index.html`): อัปโหลดรูปภาพเพื่อสกัดโทนสีหลัก (Color Palette Extraction) นำมาเปรียบเทียบกับชุดสีที่ระบบแนะนำ
-- 🚀 **GitHub Actions CI/CD** (`.github/workflows/deploy-web.yml`): ระบบ CI/CD จัดส่งหน้าเว็บไปยัง GitHub Pages อัตโนมัติเมื่อมี commit บนกิ่งหลัก
-
----
-
-## 📅 สรุปผลการทำงานจริงตามแผนงาน (3 Sprints Roadmap)
-
-### 1. Sprint 1: Core System Foundation & OOP CLI Architecture (Completed)
-
-- **สถานะ:** ✅ เสร็จสมบูรณ์
-- **รายละเอียดงาน:**
-  - พัฒนา `src/emotion_client.py` เชื่อมต่อ Hugging Face DistilBERT Pipeline พร้อมระบบ Defensive Fallback
-  - พัฒนา `src/palette_engine.py` สื่อสารตารางแมปอารมณ์ 6 ประเภทสู่กลุ่มสีจิตวิทยา
-  - พัฒนา `src/visualizer.py` วาดภาพ Swatch รูปแบบ Visual Swatches ผ่าน `matplotlib`
-  - พัฒนา `src/cli_app.py` & `main.py` ทำระบบ Interactive Command Line พร้อมโหมด `--batch`
-  - พัฒนาชุดทดสอบระบบอัตโนมัติเบื้องต้นใน `tests/test_emotion_client.py`
-
-### 2. Sprint 2: Persistence, Report & AI Advisory (Completed)
-
-- **สถานะ:** ✅ เสร็จสมบูรณ์
-- **รายละเอียดงาน:**
-  - พัฒนา `src/data_store.py` บันทึกข้อมูลลง SQLite (`data/palette_history.db`) พร้อมรองรับการ Sync ขึ้น Cloud
-  - พัฒนา `src/report_generator.py` ประมวลผลไฟล์ Batch CSV และระบบ Export โค้ดสี JSON/CSS
-  - พัฒนา `src/ai_advisory.py` สร้างคำแนะนำแนวคิดดีไซน์ และ Font Pairings ตามอารมณ์
-  - เพิ่มฟังก์ชันคำนวณอัตราส่วนความต่างสี (WCAG Contrast Ratio) ใน `palette_engine.py`
-
-### 3. Sprint 3: Web Dashboard & Deployment (Completed)
-
-- **สถานะ:** ✅ เสร็จสมบูรณ์
-- **รายละเอียดงาน:**
-  - พัฒนา `web/index.html`, `style.css`, `app.js` สร้าง Frontend Responsive Glassmorphic UI
-  - พัฒนาระบบ Bilingual Toggle (TH/EN) และ Image Color Extractor สกัดสีจากรูปภาพ
-  - ตั้งค่า GitHub Actions `.github/workflows/deploy-web.yml` สั่ง Deploy หน้าเว็บไปยัง GitHub Pages อัตโนมัติ
+### 🌐 Web Dashboard (`web/`)
+- Glassmorphism UI, สลับภาษา TH/EN, สกัดสีจากรูปภาพ, Export ASE / JSON / Figma tokens / HEX / RGB / HSL / Tailwind / CSS Vars
+- AI ทำงานบนเบราว์เซอร์ผู้ใช้ (Transformers.js) — โหลดแบบ lazy ถ้า CDN ล่มจะใช้ `web/keyword_fallback.js` แทน
 
 ---
 
-## 🧩 โมดูลหลักของระบบ (Core Components)
+## 🏗️ สถาปัตยกรรม (3-Layer Architecture)
 
-### `src/emotion_client.py` (EmotionClient)
-- ทำหน้าที่เป็น Client Gateway รับข้อความภาษาอังกฤษ
-- ประมวลผลด้วยโมเดล `bhadresh-savani/distilbert-base-uncased-emotion`
-- มีระบบ Defensive Fallback Unwrapping เช็ก `isinstance` เพื่อป้องกัน `TypeError` จาก Nested List Structure
-
-### `src/palette_engine.py` (PaletteEngine)
-- ทำหน้าที่แปลงอารมณ์ความรู้สึกให้เป็นกลุ่มสี Hex Code 5 สี ตามหลัก Color Psychology
-- คำนวณค่าสัมพัทธ์ความสว่าง (Relative Luminance) และค่า Contrast Ratio ตามมาตรฐาน WCAG 2.1
-
-### `src/data_store.py` (DataStore)
-- จัดเก็บข้อมูลยั่งยืน (Persistence Storage) ลงฐานข้อมูล SQLite3 (`data/palette_history.db`)
-- มีฟังก์ชันรองรับการ Migrate และ Sync ข้อมูลไปยัง Supabase Cloud Database
-
-### `src/ai_advisory.py` (AIAdvisory)
-- ทำหน้าที่เป็นผู้ช่วยดีไซเนอร์ ประมวลผลและเสนอชื่อธีม (Theme Name), การจับคู่ฟอนต์ (Font Pairings), และคำแนะนำการนำไปใช้งานตามอารมณ์
-
-### `src/report_generator.py` (ReportGenerator)
-- อ่านไฟล์ข้อมูลชุด (`.csv`) วิเคราะห์อารมณ์และแนะนำจานสีแบบยกชุด
-- แปลงข้อมูลจานสีให้อยู่ในรูปแบบไฟล์ `.json` และ `.css` (CSS Variables) เพื่อให้นักพัฒนานำไปใช้ต่อได้ทันที
-
-### `src/cli_app.py` (CLIApp)
-- หน้าต่างปฏิสัมพันธ์ Command Line Interface (CLI) รับอินพุต ทำความสะอาดข้อความ
-- แสดงผลอารมณ์ ค่าความมั่นใจ จานสีแนะนำ พร้อมสั่งวาด Swatches และบันทึกประวัติอัตโนมัติ
-
-### `main.py` (Main Controller)
-- จุดเริ่มต้นหลักของแอปพลิเคชัน รองรับทั้ง Interactive CLI Mode (`python main.py --cli`) และ Batch File Processing Mode (`python main.py --batch <file_path>`)
+```text
+Presentation   : cli_app.py (เมนู CLI), visualizer.py, web/
+      │  เรียกเฉพาะ AnalysisService
+Business Logic : analysis_service.py (CRUD + search/filter/sort/stats)
+                 emotion_client.py, palette_engine.py, ai_advisory.py,
+                 report_generator.py, models.py, exceptions.py
+      │
+Data Access    : data_store.py (SQLite repository)
+```
+Class Diagram และ Design Patterns ดูได้ที่ [PLAN.md](./PLAN.md) · สเปกโมดูล/API ดูที่ [docs/API.md](./docs/API.md)
 
 ---
 
-## 🗂️ โครงสร้างไดเรกทอรีล่าสุด (Directory Structure)
+## 🗂️ โครงสร้างไดเรกทอรี
 
 ```text
 Final-Project/
-├── .github/
-│   └── workflows/              # GitHub Actions CI/CD Deployment Scripts
-│       └── deploy-web.yml
-├── src/                        # Core Python Application Modules
-│   ├── __init__.py
-│   ├── emotion_client.py       # Hugging Face DistilBERT Classifier
-│   ├── palette_engine.py       # Color Psychology & WCAG Calculator
-│   ├── visualizer.py           # Matplotlib Swatch Renderer
-│   ├── cli_app.py              # CLI Interactive Interface
-│   ├── data_store.py           # SQLite Local & Cloud Migration Support
-│   ├── report_generator.py     # Batch CSV Processing & Export (.css / .json)
-│   └── ai_advisory.py          # Design Advisory & Font Pairings
-├── web/                        # Frontend Web Application Dashboard
-│   ├── index.html              # Glassmorphic UI Dashboard
-│   ├── style.css               # Responsive Styling
-│   └── app.js                  # UI Interaction & Image Mood Extractor
-├── tests/                      # Automated Unit Testing Suites
-│   ├── test_emotion_client.py
-│   ├── test_palette_engine.py
-│   ├── test_data_store.py
-│   └── test_report.py
-├── data/                       # Data Storage & Batch Processing
-│   ├── palette_history.db      # SQLite Local Database (Auto-generated)
-│   └── sample_batch.csv        # Sample File for Batch Mode Testing
-├── main.py                     # Main Entry Point (--cli, --batch)
-├── requirements.txt            # Project Dependencies
-└── README.md                   # Project Documentation
+├── .github/workflows/
+│   ├── ci.yml                 # Lint (flake8) + pytest + coverage บน Python 3.10–3.12
+│   └── deploy-web.yml         # ทดสอบผ่านก่อน แล้วค่อย Deploy web/ ขึ้น GitHub Pages
+├── src/
+│   ├── models.py              # Domain models (AnalysisRecord, EmotionResult)
+│   ├── exceptions.py          # Custom exceptions
+│   ├── emotion_client.py      # Analyzer strategies + fallback
+│   ├── palette_engine.py      # Palettes + WCAG
+│   ├── ai_advisory.py         # Design advice + insight report
+│   ├── analysis_service.py    # Business logic (CRUD, search, filter, sort)
+│   ├── data_store.py          # SQLite repository
+│   ├── report_generator.py    # JSON/CSS export + batch CSV
+│   ├── visualizer.py          # Terminal swatches / PNG
+│   └── cli_app.py             # เมนู CLI
+├── web/                       # index.html, style.css, app.js, keyword_fallback.js
+├── tests/                     # 120 unit/integration tests
+├── scripts/benchmark.py       # วัดความเร็ว
+├── docs/                      # USER_GUIDE.md, API.md, BENCHMARK.md
+├── data/sample_batch.csv
+├── Sprint1/ Sprint2/ Sprint3/ # งานส่งรายสัปดาห์ (เก็บไว้เป็นประวัติ)
+├── main.py
+├── requirements.txt / requirements-ml.txt / requirements-dev.txt
+└── PLAN.md, TEST_CASE.md, CHANGELOG.md, LEARNINGLOG.md, PROJECTPITCH.md
 ```
 
 ---
 
-## 💻 วิธีใช้งานและการติดตั้งระบบ (Installation & Live Deployment)
+## 💻 การติดตั้งและใช้งาน
 
-### 1. ความต้องการของระบบ (Prerequisites)
-
-- **สำหรับฝั่ง Web Dashboard (Online):** สามารถใช้งานผ่านเว็บเบราว์เซอร์ยุคใหม่ (Chrome, Edge, Safari, Firefox) ได้ทันทีโดยไม่ต้องติดตั้งโปรแกรมใดๆ
-- **สำหรับฝั่ง Python CLI / Local Testing:**
-  - Python 3.9 ขึ้นไป
-  - Git
-
-### 2. การเข้าใช้งานผ่านระบบออนไลน์ (Live Web Dashboard)
-
-คุณสามารถทดลองใช้งานเว็บแอปพลิเคชันรูปแบบออนไลน์ (Client-Side AI Processing 100%) ได้ทันทีผ่าน GitHub Pages โดยไม่ต้องติดตั้งระบบภายในเครื่อง:
-
-👉 [**เข้าใช้งาน Smart Art & Palette Sentiment Analyzer Web Dashboard**](https://peeraphatda.github.io/Final-Project/)
-
-> **Note:** ระบบวิเคราะห์อารมณ์และสกัดสีจากรูปภาพบนหน้าเว็บ ประมวลผลผ่าน WebAssembly / ONNX Runtime บนเบราว์เซอร์ของผู้ใช้โดยตรง จึงรับประกันความเร็ว ความเป็นส่วนตัว และไม่ต้องพึ่งพา Backend API ภายนอก
-
-### 3. วิธีการติดตั้งและรันโปรแกรม
+ต้องใช้ **Python 3.10+** · คู่มือละเอียดอยู่ที่ [docs/USER_GUIDE.md](./docs/USER_GUIDE.md)
 
 ```bash
-# 1. ติดตั้ง Dependencies
+# 1) ติดตั้ง (แบบเบา — ใช้ได้ทันที)
 pip install -r requirements.txt
+# 1b) ถ้าต้องการโมเดล AI จริง (ดาวน์โหลดหลายร้อย MB)
+pip install -r requirements-ml.txt
 
-# 2. รันหน้าเว็บแดชบอร์ด (Web Dashboard) – แนะนำ
-python -m http.server 8000
-# หรือ
-python main.py --web
+# 2) โหมดเมนู CLI
+python main.py              # ใช้โมเดล AI ถ้ามี ไม่มีจะใช้ keyword อัตโนมัติ
+python main.py --offline    # บังคับโหมด keyword (เดโมไม่ต้องใช้เน็ต)
 
-# 3. รันโปรแกรมในโหมดโต้ตอบ (Interactive CLI)
-python main.py --cli
-# (สามารถเลือกเมนูเพื่อวิเคราะห์อารมณ์และสร้างจานสีได้เช่นกัน)
+# 3) โหมด Batch
+python main.py --batch data/sample_batch.csv --output exports/batch_output.csv
 
-# 4. รันโปรแกรมในโหมดประมวลผลเป็นชุด (Batch Processing Mode)
-python main.py --batch data/sample_batch.csv
+# 4) หน้าเว็บในเครื่อง (สำรองเวลาเว็บออนไลน์ล่ม)
+cd web && python -m http.server 8000   # เปิด http://localhost:8000
 
-# 5. รันชุดทดสอบระบบอัตโนมัติ (Automated Testing)
-pytest
+# 5) ทดสอบ + lint + วัดความเร็ว
+pip install -r requirements-dev.txt
+flake8 && pytest --cov=src
+python scripts/benchmark.py
 ```
+
+🌐 เว็บออนไลน์: https://peeraphatda.github.io/Final-Project/
+
+---
+
+## ⚙️ CI/CD
+
+- `ci.yml` — ทุก push / pull request: `flake8` (PEP8) → `pytest` + coverage ขั้นต่ำ 80% → smoke test โหมด batch → `node --check` ไฟล์ JS ทดสอบบน Python 3.10, 3.11, 3.12
+- `deploy-web.yml` — push เข้า `main`: รันเทสต์ก่อน ถ้าผ่านจึง deploy `web/` ขึ้น GitHub Pages
+
+---
+
+## 📈 ประสิทธิภาพและความสามารถรองรับผู้ใช้
+
+ผลวัดจริงจาก `scripts/benchmark.py` (รายละเอียดใน [docs/BENCHMARK.md](./docs/BENCHMARK.md)): กับข้อมูล **10,000 แถว** ค้นหา ~5 ms, กรอง ~1 ms, เรียงลำดับ ~2 ms, เรียงหลายคีย์ ~3 ms
+
+**เว็บ:** เป็น static site และโมเดล AI รันบนเครื่องผู้ใช้แต่ละคน ฝั่งเซิร์ฟเวอร์จึงไม่ต้องประมวลผล จำนวนผู้ใช้พร้อมกันถูกจำกัดโดยโควตาของ GitHub Pages (soft limit แบนด์วิดท์ ~100 GB/เดือน) ไม่ใช่โค้ดของเรา ไฟล์โมเดลโหลดจาก CDN ของ Hugging Face จึงไม่กินโควตานี้
+
+**CLI:** ออกแบบให้ใช้คนเดียวต่อเครื่อง (SQLite ไฟล์เดียว) — ถ้าจะให้หลายคนใช้ร่วมกันต้องย้ายไป PostgreSQL + API (ดูแผนต่อยอดใน PLAN.md)
+
+---
+
+## 🔭 ข้อจำกัดและแผนพัฒนาต่อ
+- รองรับเฉพาะข้อความภาษาอังกฤษ → แผน: ใช้โมเดลภาษาไทย เช่น WangchanBERTa
+- ข้อมูล CLI กับเว็บแยกกัน (SQLite vs localStorage) → แผน: REST API + PostgreSQL/Supabase กลาง
+- Image mood ใช้กฎจากโทนสี ไม่ใช่โมเดล AI → แผน: ใช้โมเดล vision
+- เพิ่ม Service Worker ให้เว็บใช้งานออฟไลน์ได้ และ deploy สำรองอีกที่ (Netlify / Cloudflare Pages)

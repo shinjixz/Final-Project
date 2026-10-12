@@ -17,51 +17,120 @@
 
 ---
 
-## 🏗️ UML Class Diagram (สถาปัตยกรรมเชิงวัตถุ)
+## 🏗️ UML Class Diagram (สถาปัตยกรรมเชิงวัตถุ — Final Sprint)
 
 ```mermaid
 classDiagram
-    class EmotionClient {
-        +classifier : Pipeline
-        +get_emotion(text) dict
-    }
-    class PaletteEngine {
-        +EMOTION_PALETTES : dict
-        +get_palette(emotion) list
-        +hex_to_rgb(hex_code) tuple
-        +calculate_relative_luminance(rgb) float
-        +calculate_contrast_ratio(hex1, hex2) float
-        +evaluate_wcag_compliance(fg_hex, bg_hex) dict
+    direction LR
+    class CLIApp {
+        -service: AnalysisService
+        +run()
+        +handle(choice) bool
+        +do_analyze() / do_list() / do_update() / do_delete()
+        +do_search() / do_filter() / do_sort() / do_export() / do_batch() / do_stats()
     }
     class PaletteVisualizer {
-        +plot_palette(emotion, colors, score)
+        +render_text(colors)$ str
+        +plot_palette(emotion, colors, score, path)$ str
     }
-    class DataStore {
-        +db_path : str
-        -_init_db()
-        +save_palette(input_text, emotion, confidence, hex_colors)
-        +get_history(limit) list
+    class AnalysisService {
+        -analyzer: EmotionAnalyzer
+        -store: DataStore
+        +analyze(text, save) AnalysisRecord
+        +get(id) / list_history(limit)
+        +update_text(id, text) AnalysisRecord
+        +delete(id) / clear_history()
+        +search(records, keyword)$ list
+        +filter(records, emotion, min, max, date_from, date_to)$ list
+        +sort(records, by, descending, then_by)$ list
+        +statistics() dict
+        +insight_report() str
     }
-    class ReportGenerator {
-        +export_to_css(palette, filename) str
-        +export_to_json(emotion, palette, filename) str
-        +process_batch_csv(filepath, emotion_client, palette_engine) DataFrame
+    class EmotionAnalyzer {
+        <<abstract>>
+        +get_emotion(text)* EmotionResult
+    }
+    class TransformerEmotionClient
+    class KeywordEmotionClient
+    class FallbackEmotionClient {
+        -primary: EmotionAnalyzer
+        -fallback: EmotionAnalyzer
+        +last_error: str
+    }
+    class PaletteEngine {
+        +EMOTION_PALETTES$
+        +get_palette(emotion)$ list
+        +calculate_contrast_ratio(a, b)$ float
+        +evaluate_wcag_compliance(fg, bg)$ dict
+        +best_text_pair(palette)$ dict
     }
     class AIAdvisory {
-        +ADVISORY_RULES : dict
-        +get_advice(emotion) dict
+        +get_advice(emotion)$ dict
+        +generate_insight_report(records)$ str
     }
-    class CLIApp {
-        +run()
+    class ReportGenerator {
+        +export_to_json() / export_to_css()$
+        +process_batch_csv(path, service)$ list
+        +write_batch_output(rows, path)$
     }
+    class DataStore {
+        -db_path: str
+        +recovered_from: str
+        +add() / get() / list_all() / get_history()
+        +update() / delete() / clear() / count()
+    }
+    class AnalysisRecord {
+        <<dataclass>>
+        id, input_text, emotion, confidence, hex_colors, created_at
+    }
+    class EmotionResult {
+        <<dataclass>>
+        label, score, source
+    }
+    class AppError
+    class InvalidInputError
+    class RecordNotFoundError
+    class StorageError
+    class AnalysisError
 
-    CLIApp --> EmotionClient : วิเคราะห์อารมณ์
-    CLIApp --> PaletteEngine : ขอจานสี
-    CLIApp --> PaletteVisualizer : วาด Swatch
-    CLIApp --> DataStore : บันทึกประวัติ
-    ReportGenerator --> EmotionClient : Batch วิเคราะห์
-    ReportGenerator --> PaletteEngine : Batch ขอจานสี
+    CLIApp --> AnalysisService
+    CLIApp ..> PaletteVisualizer
+    CLIApp ..> ReportGenerator
+    AnalysisService --> EmotionAnalyzer
+    AnalysisService --> DataStore
+    AnalysisService ..> PaletteEngine
+    AnalysisService ..> AIAdvisory
+    EmotionAnalyzer <|-- TransformerEmotionClient
+    EmotionAnalyzer <|-- KeywordEmotionClient
+    EmotionAnalyzer <|-- FallbackEmotionClient
+    FallbackEmotionClient o-- EmotionAnalyzer
+    DataStore ..> AnalysisRecord
+    EmotionAnalyzer ..> EmotionResult
+    AppError <|-- InvalidInputError
+    AppError <|-- RecordNotFoundError
+    AppError <|-- StorageError
+    AppError <|-- AnalysisError
 ```
+
+### Design Patterns ที่ใช้
+
+| Pattern | ใช้ที่ไหน | เหตุผล |
+| :--- | :--- | :--- |
+| **Strategy** | `EmotionAnalyzer` → `TransformerEmotionClient` / `KeywordEmotionClient` | สลับวิธีวิเคราะห์ได้โดยไม่แก้ส่วนอื่น และทดสอบด้วย Fake ได้ |
+| **Decorator / Fallback** | `FallbackEmotionClient` | ห่อ analyzer หลัก ถ้าล้มให้ใช้ตัวสำรอง |
+| **Repository** | `DataStore` | ซ่อนรายละเอียด SQL ไว้ใน Data Access Layer |
+| **Service Layer** | `AnalysisService` | UI เรียกที่เดียว Business rule ไม่ปนกับ UI |
+| **Factory** | `create_emotion_client()` | เลือก analyzer ที่ใช้ได้ตามสภาพแวดล้อม |
+| **Dependency Injection** | `CLIApp(service, input_func, output_func)` | ทดสอบเมนู CLI ด้วยอินพุตจำลองได้ |
+
+### เปรียบเทียบทางเลือก (Alternatives Considered)
+
+| ประเด็น | ที่เลือก | ทางเลือกอื่น | เหตุผล |
+| :--- | :--- | :--- | :--- |
+| การเก็บข้อมูล | SQLite | JSON / CSV | SQLite ค้นตาม id ได้ทันที, มี transaction ป้องกันไฟล์เสียระหว่างเขียน, ไม่ต้องเขียนไฟล์ทั้งก้อนทุกครั้ง; JSON ง่ายกว่าแต่ต้องโหลด/เขียนทั้งไฟล์ |
+| การค้นหา/กรอง | ทำใน Python บน list | SQL `WHERE`/`LIKE` | ข้อมูลระดับหมื่นแถวยังเร็ว (search ~5 ms @10k), โค้ดอัลกอริทึมเห็นชัดและทดสอบง่าย; ถ้าข้อมูลหลักล้านควรย้ายไปทำใน SQL + index |
+| การเรียงลำดับ | `list.sort` (Timsort, stable) | เขียน merge sort เอง | O(n log n) เท่ากันแต่เป็น C-optimized และ stable ทำให้เรียงหลายคีย์ได้ด้วยการเรียงสองรอบ |
+| AI บนเว็บ | รันบนเบราว์เซอร์ (Transformers.js) | Backend API | ไม่มีค่าเซิร์ฟเวอร์, ข้อความไม่ออกจากเครื่องผู้ใช้, รองรับผู้ใช้เพิ่มได้โดยไม่ต้องขยายเซิร์ฟเวอร์; แลกกับการโหลดโมเดลครั้งแรกนาน |
 
 ---
 
@@ -76,12 +145,12 @@ classDiagram
 | `predicted_emotion` | TEXT NOT NULL | อารมณ์ที่โมเดลทำนาย (เช่น joy, sadness) |
 | `confidence_score` | REAL NOT NULL | ค่าความมั่นใจของโมเดล (0–1) |
 | `hex_colors` | TEXT NOT NULL | จานสีเก็บเป็น JSON List เช่น `["#FFD166", "#FFFCF9", ...]` |
-| `palette_size` | INTEGER DEFAULT 8 | จำนวนสีในจานสี |
-| `created_at` | TIMESTAMP DEFAULT CURRENT_TIMESTAMP | วันเวลาที่บันทึก |
+| `palette_size` | INTEGER NOT NULL | จำนวนสีในจานสี |
+| `created_at` | TEXT NOT NULL (ISO-8601) | วันเวลาที่บันทึก (เวลาท้องถิ่น) |
 
-### Supabase Cloud — ตาราง `palette_history` (Cloud Migration)
+### Supabase Cloud — ตาราง `palette_history` (แผนต่อยอด — ยังไม่ได้ implement)
 
-โครงสร้างสอดคล้องกับ SQLite เพื่อให้ Sync ข้อมูลได้โดยตรง
+ออกแบบ schema ไว้ให้ตรงกับ SQLite เพื่อย้ายข้อมูลได้ในอนาคต
 
 | คอลัมน์ | ประเภท | คำอธิบาย |
 | :--- | :--- | :--- |
@@ -110,7 +179,7 @@ classDiagram
 ### Sprint 2: Persistence, Report & AI Advisory
 
 - [x] จัดเก็บประวัติการวิเคราะห์ลง SQLite (`data/palette_history.db`) อัตโนมัติ
-- [x] รองรับการ Migrate / Sync ข้อมูลไปยัง Supabase Cloud Database (PostgreSQL)
+- [ ] ~~รองรับการ Migrate / Sync ข้อมูลไปยัง Supabase~~ → ย้ายไปเป็นแผนต่อยอด (ออกแบบ schema แล้ว ยังไม่ได้เขียนโค้ด)
 - [x] ส่งออกจานสีเป็นไฟล์ `.json` และ `.css` (CSS Variables)
 - [x] Batch Processing อ่านไฟล์ `.csv` และสรุปผลเป็นชุดข้อมูลส่งออก
 - [x] AI Design Advisory แนะนำชื่อธีม, Font Pairings และการนำไปใช้งานตามอารมณ์
@@ -124,7 +193,20 @@ classDiagram
 - [x] Image Mood Input สกัดโทนสีหลักจากรูปภาพ และเปรียบเทียบกับจานสีที่ระบบแนะนำ
 - [x] ประมวลผลฝั่งเบราว์เซอร์ (Client-Side) ไม่พึ่ง Backend API ภายนอก
 - [x] GitHub Pages Deployment (CI/CD) — `.github/workflows/deploy-web.yml`
-- [x] โหมด `--cli`, `--batch`, `--web` ใน `main.py` ทำงานครบ
+- [x] โหมด CLI และ `--batch` ใน `main.py` ทำงานครบ (หน้าเว็บรันด้วย `python -m http.server` ในโฟลเดอร์ `web/`)
+
+### Final Sprint: DevOps, CI/CD, Testing & Hardening
+
+- [x] `python main.py` และ `pytest` รันผ่านจาก repo ที่ clone ใหม่ (ไม่มี import ที่พัง)
+- [x] CRUD ครบ: สร้าง / อ่าน / แก้ไข (วิเคราะห์ใหม่) / ลบ ผ่านเมนู CLI
+- [x] Search (ข้อความ/อารมณ์/รหัสสี), Filter (อารมณ์ + ช่วงความมั่นใจ + ช่วงวันที่), Sort (5 ฟิลด์ + หลายคีย์)
+- [x] ลบ id ที่ไม่มีอยู่ → แสดง `RecordNotFoundError` ที่จัดการแล้ว โปรแกรมไม่พัง
+- [x] ไฟล์ DB หาย → สร้างใหม่; ไฟล์ DB เสีย → สำรองไฟล์เสียแล้วสร้างใหม่; CSV หาย/ผิดรูปแบบ → แจ้งเตือน
+- [x] โมเดล AI ใช้ไม่ได้ → ใช้ keyword fallback และแจ้งผู้ใช้ ไม่มีค่าความมั่นใจปลอม (ทั้ง CLI และเว็บ)
+- [x] จานสี Python และเว็บตรงกัน 100% (มีเทสต์ตรวจ)
+- [x] CI: flake8 + pytest (coverage ≥ 80%) + smoke test บน Python 3.10–3.12; deploy เว็บเฉพาะเมื่อเทสต์ผ่าน
+- [x] Benchmark จริงด้วย `scripts/benchmark.py`
+- [x] เอกสาร: README, PLAN, คู่มือผู้ใช้ (`docs/USER_GUIDE.md`), สเปกโมดูล (`docs/API.md`)
 
 ---
 
@@ -142,8 +224,8 @@ classDiagram
 │         │   BUSINESS LOGIC LAYER                    │
 │         │                      │                    │
 │  ┌──────▼───────┐  ┌──────────▼──────────────────┐  │
-│  │ EmotionClient │  │ PaletteEngine + AIAdvisory  │  │
-│  │ (NLP Gateway) │  │ (Color Mapping + WCAG)      │  │
+│  │ AnalysisService (CRUD, Search, Filter, Sort) │  │
+│  │ EmotionAnalyzer │ PaletteEngine + AIAdvisory  │  │
 │  └──────┬───────┘  └──────────┬──────────────────┘  │
 │         │   ┌────────────────────────────────────┐  │
 │         │   │ PaletteVisualizer + ReportGenerator│  │
@@ -153,8 +235,8 @@ classDiagram
 │         │   DATA ACCESS LAYER                       │
 │         │                      │                    │
 │  ┌──────▼───────┐  ┌──────────▼──────────────────┐  │
-│  │  DataStore    │  │  Supabase Cloud Database    │  │
-│  │  (SQLite3)    │  │  (PostgreSQL)               │  │
+│  │  DataStore    │  │  Browser localStorage       │  │
+│  │  (SQLite3)    │  │  (ประวัติฝั่งเว็บ)            │  │
 │  └──────────────┘  └─────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
 ```
@@ -178,6 +260,12 @@ classDiagram
 | RF-04 | `src/palette_engine.py` | ไม่มีการตรวจความอ่านง่ายของคู่สี | เพิ่ม `calculate_relative_luminance`, `calculate_contrast_ratio` และ `evaluate_wcag_compliance` ตามมาตรฐาน WCAG 2.1 | แจ้ง PASS (AAA) / PASS (AA) / FAIL ได้ |
 | RF-05 | `src/data_store.py` | ประวัติหายเมื่อปิดโปรแกรม และเก็บจานสีเป็นสตริงอ่านยาก | สร้างตาราง SQLite อัตโนมัติ เก็บจานสีเป็น JSON และแปลงกลับด้วย `json.loads` ตอนดึงประวัติ | ดึงประวัติย้อนหลังได้ครบ จานสีกลับมาเป็น List |
 | RF-06 | `src/report_generator.py` | นักพัฒนาต้องคัดลอกโค้ดสีด้วยมือ และประมวลผลทีละข้อความ | เพิ่ม `export_to_css`, `export_to_json` และ `process_batch_csv` | นำจานสีไปใช้ต่อได้ทันที และประมวลผลเป็นชุดได้ |
+| RF-07 | `main.py`, `tests/` | import จาก `Sprint4.src` ที่ไม่มีอยู่จริง ทำให้โปรแกรมและเทสต์ทุกไฟล์รันไม่ได้ | ใช้ `src.*` เป็นแพ็กเกจเดียว, ล้าง `src/__init__.py`, เพิ่ม `pytest.ini`/`conftest.py` | `python main.py` และ `pytest` (120 tests) ผ่าน |
+| RF-08 | `cli_app.py` ↔ `data_store.py` | CLI เรียก `save_analysis()` แต่ DataStore มี `save_palette()` และ CLI เรียก DB ตรง ๆ | เพิ่ม Business Logic Layer `AnalysisService`; CLI เรียกผ่าน service เท่านั้น | แยก 3 layer ชัดเจน ทดสอบแต่ละชั้นแยกกันได้ |
+| RF-09 | `data_store.py` | มีแค่ Create/Read, พังเมื่อไม่มีโฟลเดอร์ data/ หรือไฟล์ DB เสีย, connection ไม่ถูกปิด | ทำ Repository CRUD ครบ, `os.makedirs`, กู้ DB เสีย, ใช้ `closing()` | CRUD ครบ ไม่มี resource leak |
+| RF-10 | `emotion_client.py` | ผูกกับ transformers แน่น ถ้าโหลดโมเดลไม่ได้โปรแกรมเปิดไม่ขึ้น | Strategy pattern + `FallbackEmotionClient` + lazy import | เดโมได้แม้ไม่มีเน็ต |
+| RF-11 | `web/app.js` | ค่าความมั่นใจของรูปมาจาก `Math.random()`, เมื่อ AI ล่มแสดง `SADNESS 99.5%` ตายตัว, import CDN ที่บรรทัดแรกทำให้ทั้งหน้าพังถ้า CDN ล่ม, เรียก `localhost:3000` ที่ไม่มีอยู่ | lazy `import()`, keyword fallback ที่ตรงกับ Python, แสดงข้อความเตือนจริง, ลบ API ที่ไม่มีอยู่ | ผลลัพธ์ซื่อตรง หน้าเว็บไม่พังเมื่อ CDN ล่ม |
+| RF-12 | `.github/workflows` | Workflow มีแค่ deploy ไม่มี lint/test | เพิ่ม `ci.yml` และให้ deploy รอเทสต์ผ่าน | CI/CD ครบตามเกณฑ์ |
 
 ---
 

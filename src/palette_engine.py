@@ -5,7 +5,12 @@ and WCAG 2.1 contrast ratio evaluations for accessibility compliance.
 """
 
 import math
-from typing import Dict, List, Tuple, Any
+import re
+from typing import Any, Dict, List, Tuple
+
+from src.exceptions import InvalidInputError
+
+HEX_PATTERN = re.compile(r"^#?[0-9a-fA-F]{6}$")
 
 
 class PaletteEngine:
@@ -14,28 +19,32 @@ class PaletteEngine:
     and calculating WCAG 2.1 accessibility scores.
     """
 
-    # Expanded 8-Color Palettes mapped by Emotion
-    # Hierarchy: [Primary, Secondary, Accent, Background-Light, Background-Dark, Text-Dark, Text-Light, Border/Muted]
+    # 8-colour palettes per emotion. Must stay identical to web/app.js
+    # (emotionRules) — tests/test_web.py checks this.
     EMOTION_PALETTES: Dict[str, List[str]] = {
         "joy": [
-            "#FFD166", "#FFFCF9", "#06D6A0", "#118AB2",
-            "#EF476F", "#073B4C", "#FFE8D6", "#264653"
+            "#FFD700", "#FF8C00", "#FF69B4", "#00BFFF",
+            "#32CD32", "#FFE4B5", "#FFF8DC", "#2C3E50"
         ],
         "sadness": [
-            "#1D2D44", "#3E5C76", "#748CAB", "#F0F3F4",
-            "#0B132B", "#1C2541", "#5BC0BE", "#ADB5BD"
+            "#1C2541", "#3A506B", "#5BC0BE", "#6C757D",
+            "#ADB5BD", "#D9E2EC", "#F0F4F8", "#0F172A"
         ],
         "anger": [
-            "#D90429", "#EF233C", "#2B2D42", "#8D99AE",
-            "#EDF2F4", "#212529", "#FFB703", "#6A040F"
+            "#D00000", "#9D0208", "#E85D04", "#FAA307",
+            "#370617", "#FFCCD5", "#FFF0F3", "#2B2D42"
         ],
         "fear": [
-            "#240046", "#3C096C", "#5A189A", "#7B2CBF",
-            "#9D4EDD", "#E0AAFF", "#10002B", "#C77DFF"
+            "#2B1E3A", "#4A3E3D", "#2C3539", "#5C5470",
+            "#B8C0C2", "#8D99AE", "#EDF2F4", "#111827"
         ],
         "love": [
-            "#FFB5A7", "#FCD5CE", "#F8AD9D", "#F4978E",
-            "#FBC4AB", "#FFCAD4", "#B5E2FA", "#4A4E69"
+            "#FF758F", "#FF4D6D", "#C9184A", "#FFB3C1",
+            "#FFF0F3", "#800F2F", "#FFCCD5", "#590D22"
+        ],
+        "surprise": [
+            "#7209B7", "#3F37C9", "#4CC9F0", "#F72585",
+            "#4895EF", "#E0AAFF", "#F7F0F5", "#10002B"
         ],
         "neutral": [
             "#2B2D42", "#8D99AE", "#EDF2F4", "#F8F9FA",
@@ -50,16 +59,19 @@ class PaletteEngine:
         Defaults to 'neutral' if emotion is unknown or unmapped.
         """
         normalized_emotion = emotion.lower().strip() if emotion else "neutral"
-        return cls.EMOTION_PALETTES.get(normalized_emotion, cls.EMOTION_PALETTES["neutral"])
+        palette = cls.EMOTION_PALETTES.get(
+            normalized_emotion, cls.EMOTION_PALETTES["neutral"]
+        )
+        return list(palette)  # copy so callers cannot mutate the table
 
     @staticmethod
     def hex_to_rgb(hex_code: str) -> Tuple[int, int, int]:
         """
         Converts a HEX color string (e.g., '#FFD166') to an RGB tuple (255, 209, 102).
         """
+        if not isinstance(hex_code, str) or not HEX_PATTERN.match(hex_code):
+            raise InvalidInputError(f"Invalid HEX color format: {hex_code}")
         clean_hex = hex_code.lstrip("#")
-        if len(clean_hex) != 6:
-            raise ValueError(f"Invalid HEX color format: {hex_code}")
         return tuple(int(clean_hex[i:i + 2], 16) for i in (0, 2, 4))
 
     @staticmethod
@@ -126,6 +138,19 @@ class PaletteEngine:
             "status": status,
             "is_compliant": is_compliant
         }
+
+    @classmethod
+    def best_text_pair(cls, palette: List[str]) -> Dict[str, Any]:
+        """Return the foreground/background pair with the highest contrast."""
+        best = None
+        for i, fg in enumerate(palette):
+            for bg in palette[i + 1:]:
+                result = cls.evaluate_wcag_compliance(fg, bg)
+                if best is None or result["contrast_ratio"] > best["contrast_ratio"]:
+                    best = result
+        if best is None:
+            raise InvalidInputError("palette ต้องมีอย่างน้อย 2 สี")
+        return best
 
 
 # --- Quick Self-Test / Verification ---

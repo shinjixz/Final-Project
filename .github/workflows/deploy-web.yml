@@ -1,40 +1,51 @@
-name: 🚀 Deploy Web Dashboard to GitHub Pages
+name: Deploy Web Dashboard to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch: # ปรับให้สามารถกดสั่ง Run Manual จากหน้า GitHub ได้
+    branches: [main]
+  workflow_dispatch:
 
-# กำหนด Permissions ให้ปลอดภัยตามหลัก Least Privilege
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# ป้องกันไม่ให้มี Job ซ้อนกันเมื่อมีการ Push ถี่ๆ
 concurrency:
   group: "pages"
   cancel-in-progress: true
 
 jobs:
+  # Deploy only if the code passes lint + tests (Continuous Delivery gate)
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: flake8
+      - run: pytest
+      - run: node --check web/app.js
+
   deploy:
+    needs: test
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Pages
-        uses: actions/configure-pages@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
-      - name: 📦 Upload Artifact (Web Directory)
+      - name: Upload artifact (web directory)
         uses: actions/upload-pages-artifact@v3
         with:
           path: './web'
 
-      - name: 🚀 Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

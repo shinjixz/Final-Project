@@ -1,6 +1,34 @@
 # CHANGELOG — Smart Art & Palette Sentiment Analyzer
 
-รายการบันทึกการเปลี่ยนแปลงและการอัปเดตเวอร์ชันของโครงการ **Smart Art & Palette** ตามวงจรการพัฒนาแบบ Agile / Scrum (Sprint 1 ถึง Sprint 3)
+รายการบันทึกการเปลี่ยนแปลงและการอัปเดตเวอร์ชันของโครงการ **Smart Art & Palette** ตามวงจรการพัฒนาแบบ Agile / Scrum (Sprint 1 ถึง Final Sprint)
+
+---
+
+## [v2.0.0] - 2026-10-13 (Final Sprint — DevOps, CI/CD & Hardening)
+
+### Added (ฟีเจอร์ใหม่)
+* Business Logic Layer `src/analysis_service.py`: CRUD ครบ + Search / Filter (อารมณ์, ช่วงความมั่นใจ, ช่วงวันที่) / Sort (หลายคีย์) + สถิติ
+* เมนู CLI 12 รายการ (วิเคราะห์, ดู, รายละเอียด+WCAG, แก้ไข, ลบ, ค้นหา, กรอง, เรียง, ส่งออก, batch, insight)
+* `src/models.py` (dataclass) และ `src/exceptions.py` (custom exceptions)
+* `KeywordEmotionClient` + `FallbackEmotionClient` — ใช้งานได้แม้ไม่มีโมเดล AI / ไม่มีเน็ต (Python และเว็บ)
+* AI Insight Report สรุปประวัติอัตโนมัติ, คำแนะนำดีไซน์ครบ 6 อารมณ์
+* `.github/workflows/ci.yml` — flake8 + pytest + coverage ≥ 80% + smoke test บน Python 3.10–3.12
+* 120 automated tests, `scripts/benchmark.py`, `docs/USER_GUIDE.md`, `docs/API.md`, `docs/BENCHMARK.md`
+
+### Fixed (แก้ไข)
+* `main.py` และเทสต์ import `Sprint4.src` ที่ไม่มีอยู่ → โปรแกรมและเทสต์รันไม่ได้
+* `src/__init__.py` มีโค้ด EmotionClient ซ้ำ (import transformers ทุกครั้ง)
+* CLI เรียก `save_analysis()` ที่ไม่มีอยู่ใน `DataStore`
+* DataStore พังเมื่อไม่มีโฟลเดอร์ `data/` หรือไฟล์ DB เสีย; connection ไม่ถูกปิด
+* เว็บ: ความมั่นใจจากรูปเป็นค่าสุ่ม, เมื่อ AI ล่มแสดง `SADNESS 99.5%` ตายตัว, import CDN บรรทัดแรกทำให้ทั้งหน้าพัง, เรียก `localhost:3000` ที่ไม่มีอยู่, ไม่ตรวจชนิด/ขนาดไฟล์รูป
+* จานสี Python ไม่ตรงกับเว็บ และขาดอารมณ์ `surprise`
+* `index.html` ที่ root อ้าง `style.css` ที่ไม่มี → เปลี่ยนเป็นหน้า redirect ไป `web/`
+
+### Changed
+* `deploy-web.yml` deploy เฉพาะเมื่อ lint + test ผ่าน
+* แยก dependencies: `requirements.txt` (เบา), `requirements-ml.txt` (AI), `requirements-dev.txt` (ทดสอบ)
+* เลิก track `data/palette_history.db` (เพิ่ม `.gitignore`)
+* เอกสารระบุตรง ๆ ว่า Supabase เป็นแผนต่อยอด ยังไม่ได้ implement
 
 ---
 
