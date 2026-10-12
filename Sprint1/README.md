@@ -59,16 +59,13 @@ python main.py
 
 ## 📂 ไฟล์ที่เกี่ยวข้อง
 ```
-sprint1/
+Sprint1/
 ├── src/
+│   ├── cli_app.py          ← Interactive CLI + Batch
 │   ├── emotion_client.py   ← HF Pipeline + Defensive Fallback
-│   ├── palette_engine.py   ← Emotion→Palette + WCAG
-│   ├── visualizer.py       ← Matplotlib Swatches
-│   └── cli_app.py          ← Interactive CLI + Batch
-├── tests/
+│   └── palette_engine.py   ← Emotion→Palette + WCAG
+├── test/
 │   └── test_emotion_client.py   ← 8 tests
-├── data/
 ├── main.py                 ← Entry Point (--batch)
-├── requirements.txt
 └── README.md
 ```
