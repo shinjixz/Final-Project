@@ -94,16 +94,12 @@
 ## 📂 ไฟล์ที่เกี่ยวข้อง
 
 ```
-src/
-├── sprint1/   ← emotion_client, cli_app, visualizer, ai_advisory
-├── sprint2/   ← palette_engine, data_store, report_generator
-└── sprint3/   ← README.md (เอกสารของ Sprint นี้)
-web/
-├── index.html
-├── style.css
-└── app.js
-tests/
-└── sprint3/test_web.py
-.github/workflows/
-└── deploy-web.yml
+Sprint3/
+├── src/
+│   ├── app.js          ← Web Logic (JavaScript)
+│   ├── index.html      ← Web UI (โครงหน้าเว็บ)
+│   └── style.css       ← Styling (CSS)
+├── test/
+│   └── test_web.py     ← Web Tests
+└── README.md
 ```
