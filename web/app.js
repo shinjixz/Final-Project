@@ -10,7 +10,9 @@ const $ = id => document.getElementById(id);
 
 let currentLang = 'TH';
 let paletteAnimationTimer = null;
-let sentimentPipeline = null;
+let pipelinePromise = null;   // shared model download (started once)
+let modelStatus = 'idle';      // idle | loading | ready | failed
+const MODEL_WAIT_MS = 15000;   // max wait per click before using the fallback
 
 let activePaletteData = [];
 
@@ -419,15 +421,53 @@ const renderSwatches = colors => {
     }).join('') + `</div>`;
 };
 
-async function getAIPipeline() {
-    if (!sentimentPipeline) {
-        if ($('emotionLabel'))$('emotionLabel').innerText = "Loading AI...";
+function setModelStatus(text) {
+    const el = $('modelStatus');
+    if (el) el.innerText = text || '';
+}
+
+// Start downloading the model once, in the background. Progress is shown
+// under the buttons; a failure resets the promise so the next click retries.
+function loadAIPipeline() {
+    if (pipelinePromise) return pipelinePromise;
+    modelStatus = 'loading';
+    setModelStatus(t('กำลังโหลดโมเดล AI... (ครั้งแรกอาจใช้เวลา 1–2 นาที)', 'Loading AI model... (first time may take 1–2 minutes)'));
+    const files = {};
+    pipelinePromise = (async () => {
         const { pipeline, env } = await import(TRANSFORMERS_CDN);
         env.allowLocalModels = false;
-        sentimentPipeline = await pipeline('zero-shot-classification', 'Xenova/distilbert-base-uncased-mnli');
-    }
-    return sentimentPipeline;
+        return pipeline('zero-shot-classification', 'Xenova/distilbert-base-uncased-mnli', {
+            quantized: true,
+            progress_callback: (p) => {
+                if (p.status === 'progress' && p.total) {
+                    files[p.file] = [p.loaded, p.total];
+                    const [done, total] = Object.values(files)
+                        .reduce(([d, t], [l, tt]) => [d + l, t + tt], [0, 0]);
+                    setModelStatus(t(`กำลังดาวน์โหลดโมเดล AI ${Math.floor(done / total * 100)}% (ครั้งแรกเท่านั้น)`,
+                        `Downloading AI model ${Math.floor(done / total * 100)}% (first time only)`));
+                }
+            }
+        });
+    })().then(model => {
+        modelStatus = 'ready';
+        setModelStatus(t('✅ โมเดล AI พร้อมใช้งาน', '✅ AI model ready'));
+        return model;
+    }).catch(err => {
+        modelStatus = 'failed';
+        pipelinePromise = null;
+        setModelStatus(t('⚠️ โหลดโมเดล AI ไม่สำเร็จ ใช้โหมดสำรองแทน', '⚠️ AI model failed to load, using fallback'));
+        throw err;
+    });
+    return pipelinePromise;
 }
+
+// Wait for the model, but never longer than MODEL_WAIT_MS.
+async function getAIPipeline() {
+    const timeout = new Promise((_, reject) => setTimeout(
+        () => reject(new Error('MODEL_TIMEOUT')), MODEL_WAIT_MS));
+    return Promise.race([loadAIPipeline(), timeout]);
+}
+
 
 // ==========================================
 // 🛟 UI HELPERS
@@ -714,6 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             clearImageResult();
             analyzeBtn.disabled = true;
+            if ($('emotionLabel'))$('emotionLabel').innerText = t('กำลังวิเคราะห์...', 'Analyzing...');
 
             try {
                 const classifier = await getAIPipeline();
@@ -730,15 +771,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!fallback.label) {
                     if ($('emotionLabel'))$('emotionLabel').innerText = '-';
                     if ($('confidenceValue'))$('confidenceValue').innerText = '0%';
-                    showAlert(t('โมเดล AI โหลดไม่สำเร็จ และโหมดสำรองไม่พบคำบ่งบอกอารมณ์ในข้อความนี้ ลองเขียนให้ชัดขึ้นหรือลองใหม่เมื่อออนไลน์',
-                        'AI model unavailable and the offline fallback found no emotion words. Try clearer text or retry when online.'));
+                    showAlert(err?.message === 'MODEL_TIMEOUT'
+                        ? t('โมเดล AI ยังดาวน์โหลดไม่เสร็จ และโหมดสำรองไม่พบคำบ่งบอกอารมณ์ในข้อความนี้ — รอให้ขึ้น ✅ แล้วกดวิเคราะห์อีกครั้ง',
+                            'AI model is still downloading and the offline mode found no emotion words — wait for ✅ and analyze again.')
+                        : t('โมเดล AI โหลดไม่สำเร็จ และโหมดสำรองไม่พบคำบ่งบอกอารมณ์ในข้อความนี้ ลองเขียนให้ชัดขึ้นหรือลองใหม่เมื่อออนไลน์',
+                            'AI model unavailable and the offline fallback found no emotion words. Try clearer text or retry when online.'));
                 } else {
                     const topEmotion = fallback.label.toUpperCase();
                     const confidenceScore = (fallback.score * 100).toFixed(1) + '% (offline)';
                     updateUIResult(topEmotion, confidenceScore);
                     saveToHistory('text', text, topEmotion, confidenceScore, emotionRules[topEmotion]?.palette);
-                    showAlert(t('ใช้โหมดสำรองแบบ keyword เพราะโหลดโมเดล AI ไม่สำเร็จ (ผลอาจแม่นยำน้อยกว่า)',
-                        'Using offline keyword mode because the AI model could not load (less accurate).'));
+                    showAlert(err?.message === 'MODEL_TIMEOUT'
+                        ? t('โมเดล AI ยังดาวน์โหลดไม่เสร็จ จึงใช้โหมดสำรองไปก่อน — รอให้ขึ้น ✅ แล้วกดวิเคราะห์อีกครั้ง',
+                            'AI model is still downloading, so the offline mode was used — wait for ✅ and analyze again.')
+                        : t('ใช้โหมดสำรองแบบ keyword เพราะโหลดโมเดล AI ไม่สำเร็จ (ผลอาจแม่นยำน้อยกว่า)',
+                            'Using offline keyword mode because the AI model could not load (less accurate).'));
                 }
             } finally {
                 analyzeBtn.disabled = false;
@@ -747,4 +794,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateLanguageUI();
+    // Start the model download right away so it is ready by the first click.
+    loadAIPipeline().catch(() => { /* status already shown; fallback handles it */ });
 });
