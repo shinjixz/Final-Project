@@ -1,6 +1,6 @@
 import { EMOTION_LABELS, keywordEmotion } from './keyword_fallback.js';
 
-// The AI library is imported lazily inside getAIPipeline(): if the CDN is down
+// The AI library is imported lazily inside loadAIPipeline(): if the CDN is down
 // the rest of the page still works and the keyword fallback takes over.
 const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 const MAX_TEXT_LENGTH = 1000;
@@ -11,7 +11,12 @@ const $ = id => document.getElementById(id);
 let currentLang = 'TH';
 let pipelinePromise = null;   // shared model download (started once)
 let modelStatus = 'idle';      // idle | loading | ready | failed
-const MODEL_WAIT_MS = 15000;   // max wait per click before using the fallback
+const HISTORY_KEY = 'sentiment_history';
+const HISTORY_LIMIT = 200;     // items kept in this browser
+const HISTORY_PAGE = 10;       // items shown per "show more"
+let historyShown = HISTORY_PAGE;
+let analyzeRequestId = 0;      // ignore late AI results for old clicks
+let historyIdCounter = 0;
 
 let activePaletteData = [];
 
@@ -233,13 +238,13 @@ function extractRGBColors(ctx, width, height, count) {
 }
 
 // Small JPEG copy of the image for the history list (keeps localStorage small).
-function makeThumbnail(img, maxSide = 320) {
+function makeThumbnail(img, maxSide = 200) {
     const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(img.width * scale));
     canvas.height = Math.max(1, Math.round(img.height * scale));
     canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.75);
+    return canvas.toDataURL('image/jpeg', 0.7);
 }
 
 function analyzeColorSentiment(rgbColors) {
@@ -290,7 +295,11 @@ const translations = {
         usage: 'เหมาะกับ',
         historyTitle: 'ประวัติล่าสุด',
         clearHistory: 'ล้างประวัติ',
-        emptyHistory: 'ยังไม่มีประวัติ ผลการวิเคราะห์ 10 รายการล่าสุดจะเก็บไว้ที่นี่',
+        emptyHistory: 'ยังไม่มีประวัติ ผลการวิเคราะห์จะเก็บไว้ในเบราว์เซอร์นี้',
+        showMore: 'ดูเพิ่ม',
+        deleteItem: 'ลบรายการนี้',
+        historyCount: 'เก็บไว้ {n} จากสูงสุด {max} รายการในเบราว์เซอร์นี้',
+        quickResult: 'ผลด่วน',
         imageItem: 'รูปภาพ',
         modalTitle: 'ล้างประวัติทั้งหมด?',
         modalDesc: 'ประวัติทั้งหมดในเบราว์เซอร์นี้จะถูกลบ และกู้คืนไม่ได้',
@@ -319,7 +328,11 @@ const translations = {
         usage: 'Good for',
         historyTitle: 'Recent',
         clearHistory: 'Clear history',
-        emptyHistory: 'No history yet. Your last 10 results will be kept here.',
+        emptyHistory: 'No history yet. Your results are kept in this browser.',
+        showMore: 'Show more',
+        deleteItem: 'Delete this item',
+        historyCount: '{n} of up to {max} items kept in this browser',
+        quickResult: 'quick result',
         imageItem: 'Image',
         modalTitle: 'Clear all history?',
         modalDesc: 'All history in this browser will be deleted and cannot be restored.',
@@ -533,12 +546,6 @@ function loadAIPipeline() {
     return pipelinePromise;
 }
 
-// Wait for the model, but never longer than MODEL_WAIT_MS.
-async function getAIPipeline() {
-    const timeout = new Promise((_, reject) => setTimeout(
-        () => reject(new Error('MODEL_TIMEOUT')), MODEL_WAIT_MS));
-    return Promise.race([loadAIPipeline(), timeout]);
-}
 
 
 // ==========================================
@@ -573,8 +580,37 @@ function applyAccent(colorList) {
     document.documentElement.style.setProperty('--accent', accent);
 }
 
+function readHistory() {
+    try {
+        const data = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        return Array.isArray(data) ? data : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+// Save the list; if the browser storage is full, drop the oldest items until it fits.
+function writeHistory(items) {
+    let list = items.slice(0, HISTORY_LIMIT);
+    while (true) {
+        try {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+            return true;
+        } catch (e) {
+            if (list.length <= 1) {
+                console.error('LocalStorage error:', e);
+                showAlert(t('บันทึกประวัติไม่ได้ (พื้นที่เบราว์เซอร์เต็มหรือถูกปิด) แต่ผลวิเคราะห์ยังใช้ได้ตามปกติ',
+                    'Could not save history (browser storage full or blocked); results still work.'));
+                return false;
+            }
+            list = list.slice(0, Math.floor(list.length * 0.9)); // remove the oldest 10%
+        }
+    }
+}
+
 function saveToHistory(type, inputContent, emotion, confidence, palette, thumb = null) {
     const newItem = {
+        id: Date.now().toString(36) + "-" + (historyIdCounter++),
         type,
         content: inputContent,
         thumb,
@@ -583,20 +619,24 @@ function saveToHistory(type, inputContent, emotion, confidence, palette, thumb =
         palette,
         createdAt: new Date().toISOString()
     };
-
-    try {
-        const localData = JSON.parse(localStorage.getItem('sentiment_history') || '[]');
-        localData.unshift(newItem);
-        if (localData.length > 10) localData.pop();
-        localStorage.setItem('sentiment_history', JSON.stringify(localData));
-    } catch (e) {
-        // Quota full (large images) or storage blocked: keep working without history.
-        console.error("LocalStorage error:", e);
-        showAlert(t('บันทึกประวัติไม่ได้ (พื้นที่เบราว์เซอร์เต็มหรือถูกปิด) แต่ผลวิเคราะห์ยังใช้ได้ตามปกติ',
-            'Could not save history (browser storage full or blocked); results still work.'));
-    }
-
+    writeHistory([newItem, ...readHistory()]);
     renderHistoryList();
+    return newItem.id;
+}
+
+function updateHistoryItem(id, changes) {
+    const items = readHistory();
+    const item = items.find(it => it.id === id);
+    if (!item) return;
+    Object.assign(item, changes);
+    writeHistory(items);
+    renderHistoryList();
+}
+
+function deleteHistoryItem(id) {
+    writeHistory(readHistory().filter(it => it.id !== id));
+    renderHistoryList();
+    toast(t('ลบรายการแล้ว', 'Item deleted'));
 }
 
 function openConfirmModal() {
@@ -608,7 +648,8 @@ function closeConfirmModal() {
 }
 
 function executeClearHistory() {
-    try { localStorage.removeItem('sentiment_history'); } catch (e) { console.error(e); }
+    try { localStorage.removeItem(HISTORY_KEY); } catch (e) { console.error(e); }
+    historyShown = HISTORY_PAGE;
     renderHistoryList();
     closeConfirmModal();
 }
@@ -633,13 +674,14 @@ function renderHistoryList() {
     if (!list) return;
     const tr = translations[currentLang];
 
-    let historyData = [];
-    try {
-        historyData = JSON.parse(localStorage.getItem('sentiment_history') || '[]');
-    } catch (e) {
-        historyData = [];
+    const allItems = readHistory();
+    // Older entries have no id: give them one so they can be deleted/updated.
+    if (allItems.some(it => !it.id)) {
+        allItems.forEach((it, i) => { if (!it.id) it.id = 'old' + i + Date.now().toString(36); });
+        writeHistory(allItems);
     }
-    if (!Array.isArray(historyData) || historyData.length === 0) {
+    const historyData = allItems.slice(0, historyShown);
+    if (historyData.length === 0) {
         list.innerHTML = `<li class="history-empty">${escapeHtml(tr.emptyHistory)}</li>`;
         return;
     }
@@ -662,7 +704,7 @@ function renderHistoryList() {
         const emotion = String(item.emotion || '-').toLowerCase();
 
         return `
-            <li>
+            <li class="history-row">
                 <button type="button" class="history-item" data-index="${index}">
                     ${visual}
                     <span class="history-main">
@@ -673,8 +715,21 @@ function renderHistoryList() {
                         ${hexList.slice(0, 8).map(c => `<span style="background:${escapeHtml(c)}"></span>`).join('')}
                     </span>
                 </button>
+                <button type="button" class="history-delete" data-id="${escapeHtml(item.id)}"
+                    aria-label="${escapeHtml(tr.deleteItem)}" title="${escapeHtml(tr.deleteItem)}">×</button>
             </li>`;
-    }).join('');
+    }).join('') + (allItems.length > historyShown
+        ? `<li class="history-more"><button type="button" id="historyMoreBtn" class="btn-ghost">
+               ${escapeHtml(tr.showMore)} (${allItems.length - historyShown})</button></li>`
+        : '') + `<li class="history-count">${escapeHtml(tr.historyCount.replace('{n}', allItems.length).replace('{max}', HISTORY_LIMIT))}</li>`;
+
+    list.querySelectorAll('.history-delete').forEach(el => {
+        el.addEventListener('click', () => deleteHistoryItem(el.dataset.id));
+    });
+    $('historyMoreBtn')?.addEventListener('click', () => {
+        historyShown += HISTORY_PAGE;
+        renderHistoryList();
+    });
 
     list.querySelectorAll('.history-item').forEach(el => {
         el.addEventListener('click', () => {
@@ -832,41 +887,66 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             clearImageResult();
-            analyzeBtn.disabled = true;
-            analyzeBtn.innerText = translations[currentLang].analyzing;
+            const requestId = ++analyzeRequestId;
+            const tr = translations[currentLang];
 
-            try {
-                const classifier = await getAIPipeline();
+            const runModel = async (classifier) => {
                 const output = await classifier(text, EMOTION_LABELS);
                 if (!output?.labels?.length) throw new Error('Empty model output');
-                const topEmotion = output.labels[0].toUpperCase();
-                const confidenceScore = (output.scores[0] * 100).toFixed(1) + "%";
-                updateUIResult(topEmotion, confidenceScore);
-                saveToHistory('text', text, topEmotion, confidenceScore, emotionRules[topEmotion]?.palette);
-            } catch (err) {
-                // AI model / CDN unavailable -> honest keyword fallback, never a fake result.
-                console.warn('AI model unavailable, using keyword fallback:', err);
-                const fallback = keywordEmotion(text);
-                if (!fallback.label) {
-                    showAlert(err?.message === 'MODEL_TIMEOUT'
-                        ? t('โมเดล AI ยังดาวน์โหลดไม่เสร็จ และโหมดสำรองไม่พบคำบ่งบอกอารมณ์ในข้อความนี้ — รอให้ขึ้น ✅ แล้วกดวิเคราะห์อีกครั้ง',
-                            'AI model is still downloading and the offline mode found no emotion words — wait for ✅ and analyze again.')
-                        : t('โมเดล AI โหลดไม่สำเร็จ และโหมดสำรองไม่พบคำบ่งบอกอารมณ์ในข้อความนี้ ลองเขียนให้ชัดขึ้นหรือลองใหม่เมื่อออนไลน์',
-                            'AI model unavailable and the offline fallback found no emotion words. Try clearer text or retry when online.'));
-                } else {
-                    const topEmotion = fallback.label.toUpperCase();
-                    const confidenceScore = (fallback.score * 100).toFixed(1) + '% (offline)';
-                    updateUIResult(topEmotion, confidenceScore);
-                    saveToHistory('text', text, topEmotion, confidenceScore, emotionRules[topEmotion]?.palette);
-                    showAlert(err?.message === 'MODEL_TIMEOUT'
-                        ? t('โมเดล AI ยังดาวน์โหลดไม่เสร็จ จึงใช้โหมดสำรองไปก่อน — รอให้ขึ้น ✅ แล้วกดวิเคราะห์อีกครั้ง',
-                            'AI model is still downloading, so the offline mode was used — wait for ✅ and analyze again.')
-                        : t('ใช้โหมดสำรองแบบ keyword เพราะโหลดโมเดล AI ไม่สำเร็จ (ผลอาจแม่นยำน้อยกว่า)',
-                            'Using offline keyword mode because the AI model could not load (less accurate).'));
+                return {
+                    emotion: output.labels[0].toUpperCase(),
+                    confidence: (output.scores[0] * 100).toFixed(1) + '%'
+                };
+            };
+
+            // 1) AI already loaded: answer with the model straight away.
+            if (modelStatus === 'ready') {
+                analyzeBtn.disabled = true;
+                analyzeBtn.innerText = tr.analyzing;
+                try {
+                    const r = await runModel(await loadAIPipeline());
+                    updateUIResult(r.emotion, r.confidence);
+                    saveToHistory('text', text, r.emotion, r.confidence, emotionRules[r.emotion]?.palette);
+                } catch (err) {
+                    console.warn('AI model failed, using keyword fallback:', err);
+                    modelStatus = 'failed';
+                } finally {
+                    analyzeBtn.disabled = false;
+                    analyzeBtn.innerText = translations[currentLang].analyzeBtn;
                 }
-            } finally {
-                analyzeBtn.disabled = false;
-                analyzeBtn.innerText = translations[currentLang].analyzeBtn;
+                if (modelStatus === 'ready') return;
+            }
+
+            // 2) AI not ready yet: show the instant keyword result now,
+            //    then replace it with the AI result as soon as the model finishes loading.
+            const quick = keywordEmotion(text);
+            let historyId = null;
+            if (quick.label) {
+                const emotion = quick.label.toUpperCase();
+                const confidence = `${(quick.score * 100).toFixed(1)}% (${tr.quickResult})`;
+                updateUIResult(emotion, confidence);
+                historyId = saveToHistory('text', text, emotion, confidence, emotionRules[emotion]?.palette);
+            }
+            showAlert(t('แสดงผลด่วนจากคำในประโยคก่อน ระบบจะอัปเดตเป็นผลจาก AI ให้อัตโนมัติเมื่อโหลดโมเดลเสร็จ (โหลดครั้งแรกครั้งเดียว)',
+                'Showing a quick keyword result first. It will update to the AI result automatically once the model has loaded (first visit only).'));
+
+            try {
+                const r = await runModel(await loadAIPipeline());
+                if (requestId !== analyzeRequestId) return; // user already asked something newer
+                updateUIResult(r.emotion, r.confidence);
+                const palette = emotionRules[r.emotion]?.palette;
+                if (historyId) updateHistoryItem(historyId, { emotion: r.emotion, confidence: r.confidence, palette });
+                else saveToHistory('text', text, r.emotion, r.confidence, palette);
+                showAlert('');
+                toast(t('อัปเดตเป็นผลจาก AI แล้ว', 'Updated with the AI result'));
+            } catch (err) {
+                if (requestId !== analyzeRequestId) return;
+                console.warn('AI model unavailable, keeping keyword result:', err);
+                showAlert(quick.label
+                    ? t('โหลดโมเดล AI ไม่สำเร็จ จึงใช้ผลจากคำในประโยค (แม่นยำน้อยกว่า) กดวิเคราะห์อีกครั้งเพื่อลองโหลดใหม่',
+                        'The AI model could not load, so the keyword result is shown (less accurate). Press Analyze again to retry.')
+                    : t('โหลดโมเดล AI ไม่สำเร็จ และไม่พบคำบ่งบอกอารมณ์ในข้อความนี้ ลองเขียนให้ชัดขึ้น หรือกดวิเคราะห์อีกครั้งเมื่อออนไลน์',
+                        'The AI model could not load and no emotion words were found. Try clearer text, or analyze again when online.'));
             }
         });
     }

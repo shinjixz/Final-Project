@@ -106,5 +106,5 @@ Keyword score = `(คำที่ตรงอารมณ์ชนะ / คำ�
 
 | ไฟล์ | หน้าที่ |
 | :--- | :--- |
-| `app.js` | UI, โหลด Transformers.js แบบ lazy (`zero-shot-classification`, `Xenova/distilbert-base-uncased-mnli`), export, ประวัติใน `localStorage` |
+| `app.js` | UI, โหลด Transformers.js แบบ lazy (`zero-shot-classification`, `Xenova/distilbert-base-uncased-mnli`) แสดงผลด่วนก่อนแล้วอัปเดตเป็นผล AI, export, ประวัติใน `localStorage` สูงสุด 200 รายการ (ลบรายการเก่าอัตโนมัติเมื่อพื้นที่เต็ม) |
 | `keyword_fallback.js` | `keywordEmotion(text) -> {label, score}` — ตรงกับ `KeywordEmotionClient` (มีเทสต์ตรวจ) |
