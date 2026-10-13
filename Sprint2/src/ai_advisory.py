@@ -1,6 +1,6 @@
 """
 Module: ai_advisory.py
-Role: Planner (กาย)
+Role: Planner (ท็อป)
 Description: คำแนะนำแนวคิดดีไซน์ + Font Pairings + การนำไปใช้งานตามอารมณ์ (Rule-Based)
 """
 

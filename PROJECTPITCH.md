@@ -52,9 +52,9 @@
 ---
 
 ## 8. บทบาทและความรับผิดชอบ (Roles & Responsibilities)
-* **ผู้ดูแลระบบและสถาปนิก (Planner / System Architect):** ท็อป / ปลั๊ก / กาย / ภีม (หมุนเวียนบทบาทใน Sprint 1–3) — ดูแลการตั้งค่า Repo, ออกแบบ Schema ฐานข้อมูล, กำหนดสเปก i18n และตั้งค่า GitHub Actions CI/CD
-* **นักพัฒนาหลัก (Core Developers):** ท็อป / ปลั๊ก / กาย / ภีม (หมุนเวียนบทบาทใน Sprint 1–3) — พัฒนาระบบเชื่อมต่อ NLP DistilBERT, ตัวแสดงผล Matplotlib, ระบบ SQLite, ตัวส่งออก Batch และ Web UI
-* **ผู้ทดสอบและควบคุมคุณภาพ (Automated Tester & QA Debugger):** ท็อป / ปลั๊ก / กาย / ภีม (หมุนเวียนบทบาทใน Sprint 1–3) — เขียน Unit Test (`pytest`), จัดการดักจับ Exception ป้องกันแอป Crash, ตรวจสอบการคำนวณ WCAG และทดสอบการทำงานข้ามเบราว์เซอร์
+* **ผู้ดูแลระบบและสถาปนิก (Planner / System Architect):** Sprint 1 กาย / Sprint 2 ท็อป / Sprint 3 ภีม — ดูแลการตั้งค่า Repo, ออกแบบ Schema ฐานข้อมูล, กำหนดสเปก i18n และตั้งค่า GitHub Actions CI/CD
+* **นักพัฒนาหลัก (Core Developers):** Sprint 1 ท็อป, ปลั๊ก / Sprint 2 กาย, ภีม / Sprint 3 ท็อป, ปลั๊ก — พัฒนาระบบเชื่อมต่อ NLP DistilBERT, ตัวแสดงผล Matplotlib, ระบบ SQLite, ตัวส่งออก Batch และ Web UI
+* **ผู้ทดสอบและควบคุมคุณภาพ (Automated Tester & QA Debugger):** Sprint 1 ภีม / Sprint 2 ปลั๊ก / Sprint 3 กาย — เขียน Unit Test (`pytest`), จัดการดักจับ Exception ป้องกันแอป Crash, ตรวจสอบการคำนวณ WCAG และทดสอบการทำงานข้ามเบราว์เซอร์
 * **Final Sprint (ทำงานตามความเชี่ยวชาญ):** กาย — Core Logic Lead / ท็อป — AI & Web Lead / ปลั๊ก — DevOps Lead / ภีม — QA & Testing Lead
 
 ---

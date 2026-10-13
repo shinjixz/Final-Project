@@ -1,6 +1,6 @@
 """
 Module: cli_app.py
-Role: Debugger (ภีม) & Coder 2 (ปลั๊ก)
+Role: Coder 2 (ภีม) & Debugger (ปลั๊ก)
 Description: CLI Loop + Input Validation + Batch (Sprint 1)
              + บันทึก DB / คำแนะนำดีไซน์ / WCAG / Export (Sprint 2)
 """
